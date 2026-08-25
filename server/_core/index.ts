@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { openRenderedVideo, renderFullDurationVideo, renderedVideoExists } from "../mediaRender";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -36,6 +37,27 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+
+  app.post("/api/media/render", async (req, res) => {
+    try {
+      const result = await renderFullDurationVideo(req);
+      res.status(201).json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "MEDIA_RENDER_FAILED";
+      const status = message === "VIDEO_TOO_LARGE" ? 413 : 422;
+      res.status(status).json({ ready: false, error: message });
+    }
+  });
+
+  app.get("/api/media/render/:id", async (req, res) => {
+    if (!(await renderedVideoExists(req.params.id))) {
+      res.status(404).json({ ready: false, error: "OUTPUT_NOT_FOUND" });
+      return;
+    }
+    res.type("mp4");
+    openRenderedVideo(req.params.id).pipe(res);
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

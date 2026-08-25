@@ -222,29 +222,44 @@
 
 # GitHub React sync — pending
 
-- [ ] Clone the user's GitHub repository with gh and inspect the current main branch.
-- [ ] Create a reversible backup branch/tag reference for the current Streamlit files before replacement.
-- [ ] Copy the tested React project source into the repository root without node_modules or dist.
-- [ ] Commit the React source replacement to main with a clear message.
-- [ ] Verify the remote root contains client, server, shared, package.json, and the React handoff guide.
+- [x] Clone the user's GitHub repository with gh and inspect the current main branch.
+- [x] Create a reversible backup branch/tag reference for the current Streamlit files before replacement.
+- [x] Copy the tested React project source into the repository root without node_modules or dist.
+- [x] Commit the React source replacement to main with a clear message.
+- [x] Verify the remote root contains client, server, shared, package.json, and the React handoff guide.
 
 # GitHub retry attempt — pending
 
-- [ ] Recheck the GitHub repository write path after the user requested a retry.
-- [ ] Preserve or recreate the current Streamlit backup branch before replacing main.
-- [ ] Retry React source upload through the authenticated repository path.
-- [ ] Verify the remote root and commit result from the phone-friendly repository view.
+- [x] Recheck the GitHub repository write path after the user requested a retry.
+- [x] Preserve or recreate the current Streamlit backup branch before replacing main.
+- [x] Retry React source upload through the authenticated repository path.
+- [x] Verify the remote root and commit result from the phone-friendly repository view.
 
 # GitHub retry after email verification — pending
 
-- [ ] Recheck repository write capability after the GitHub email verification step.
-- [ ] Confirm or recreate the remote Streamlit backup before replacing main.
-- [ ] Retry the React source commit through the authorized GitHub path.
-- [ ] Verify remote main and backup branch contents after the retry.
+- [x] Recheck repository write capability after the GitHub email verification step.
+- [x] Confirm or recreate the remote Streamlit backup before replacing main.
+- [x] Retry the React source commit through the authorized GitHub path.
+- [x] Verify remote main and backup branch contents after the retry.
 
 # GitHub upload retry after unsuspend — pending
 
-- [ ] Check the refreshed GitHub API write scope after unsuspending the Manus Connector.
-- [ ] Confirm or create the remote Streamlit backup branch.
-- [ ] Commit the tested React source into the selected repository.
-- [ ] Verify main and backup branches plus the expected root folders.
+- [x] Check the refreshed GitHub API write scope after unsuspending the Manus Connector.
+- [x] Confirm or create the remote Streamlit backup branch.
+- [x] Commit the tested React source into the selected repository.
+- [x] Verify main and backup branches plus the expected root folders.
+
+# Core usable workflow rebuild — pending
+
+- [ ] Define a single successful upload-to-MP4 acceptance path before adding optional features.
+- [ ] Add a real server-side media processing contract rather than manifest-only export.
+- [ ] Add real Burmese TTS generation and synchronized Myanmar subtitle timing.
+- [ ] Preserve the original source duration in the rendered output.
+- [ ] Add provider-blocked link review with an explicit upload fallback.
+- [ ] Run an end-to-end test with an authorized sample video before calling the app usable.
+- [ ] Prepare a phone-friendly deployment path that actually runs the React frontend and backend.
+
+# Latest backend sync — pending
+
+- [ ] Sync the latest accepted project files, including mediaRender.ts and ACCEPTANCE.md, into GitHub main.
+- [ ] Verify the new remote commit includes the media backend source and handoff documentation.
