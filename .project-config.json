@@ -1,0 +1,42 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [
+    "server",
+    "db",
+    "user"
+  ],
+  "dev_command": "pnpm run dev",
+  "env_vars": {
+    "DATABASE_URL": "mysql://3AZNLU9JqRZE7kE.root:Gnq1wnj7bfVd7Nps08r4@gateway05.us-east-1.prod.aws.tidbcloud.com:4000/dn373L8JQLne86vi5AN8g6?ssl={\"rejectUnauthorized\":true}"
+  },
+  "experiments": [
+    "no_db_push"
+  ],
+  "git_remote": {
+    "repo_url": "https://7f0548f6b28a1758d9bf7be630d36cb4.artifacts.cloudflare.net/git/prod/dn373L8JQLne86vi5AN8g6.git",
+    "expiration": "2026-08-26T05:36:42.132Z",
+    "token": "art_v2_x_48445b1e730f63945289df3ccac04b4ac68dab8d?expires=1787722602",
+    "backend": "GIT_BACKEND_ARTIFACTS"
+  },
+  "name": "aungmin-movie-recap",
+  "path": "/home/ubuntu/aungmin-movie-recap",
+  "port": 3000,
+  "secrets": {
+    "BUILT_IN_FORGE_API_KEY": "Vc9JD5rDe4viAcp89rXMvC",
+    "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
+    "JWT_SECRET": "3etPyVADAk3adVAYeLFZmM",
+    "OAUTH_SERVER_URL": "https://api.manus.im",
+    "OWNER_NAME": "Yg Gg",
+    "OWNER_OPEN_ID": "Lx7EBGiHLtZ6sDxeuK554S",
+    "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
+    "VITE_ANALYTICS_WEBSITE_ID": "6021f663-38fe-48e6-b84b-3d33029e9c45",
+    "VITE_APP_ID": "dn373L8JQLne86vi5AN8g6",
+    "VITE_APP_LOGO": "",
+    "VITE_APP_TITLE": "AungMin Movie Recap",
+    "VITE_FRONTEND_FORGE_API_KEY": "W9QfqKJsvLdjhPJPv8fspL",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
+    "VITE_OAUTH_PORTAL_URL": "https://manus.im"
+  },
+  "template_id": "web-db-user",
+  "test_command": "pnpm test"
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `appSettings` MODIFY COLUMN `enabledTools` text NOT NULL;

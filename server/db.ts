@@ -1,0 +1,14 @@
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
+import { appSettings, InsertUser, users, type AppSettings, type InsertAppSettings } from "../drizzle/schema";
+import { ENV } from "./_core/env";
+import { DEFAULT_MOVIE_RECAP_CONFIG, normalizeMovieRecapConfig } from "../shared/movieRecapConfig";
+
+let _db: ReturnType<typeof drizzle> | null = null;
+export async function getDb() { if (!_db && process.env.DATABASE_URL) { try { _db = drizzle(process.env.DATABASE_URL); } catch (error) { console.warn("[Database] Failed to connect:", error); _db = null; } } return _db; }
+export async function upsertUser(user: InsertUser): Promise<void> { if (!user.openId) throw new Error("User openId is required for upsert"); const db = await getDb(); if (!db) return; const values: InsertUser = { openId: user.openId }; const updateSet: Record<string, unknown> = {}; for (const field of ["name", "email", "loginMethod"] as const) { if (user[field] !== undefined) { values[field] = user[field] ?? null; updateSet[field] = user[field] ?? null; } } if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; } if (user.role !== undefined || user.openId === ENV.ownerOpenId) { values.role = user.role ?? "admin"; updateSet.role = values.role; } values.lastSignedIn ??= new Date(); updateSet.lastSignedIn ??= new Date(); await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet }); }
+export async function getUserByOpenId(openId: string) { const db = await getDb(); if (!db) return undefined; const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1); return result[0]; }
+
+export async function getAppSettings(): Promise<AppSettings | null> { const db = await getDb(); if (!db) return null; const rows = await db.select().from(appSettings).limit(1); return rows[0] ?? null; }
+export async function saveAppSettings(input: Record<string, unknown>) { const db = await getDb(); if (!db) return null; const normalized = normalizeMovieRecapConfig(input as any); const existing = await getAppSettings(); const values: InsertAppSettings = { brandName: normalized.brandName, theme: normalized.theme, uploadLimitMb: normalized.uploadLimitMb, storagePolicy: normalized.storagePolicy, defaultPlatform: normalized.defaultPlatform, enabledTools: normalized.enabledTools.join(","), exportFormats: normalized.exportFormats.join(",") }; if (input.logoUrl !== undefined) values.logoUrl = input.logoUrl === null ? null : String(input.logoUrl); if (input.faviconUrl !== undefined) values.faviconUrl = input.faviconUrl === null ? null : String(input.faviconUrl); if (existing) { await db.update(appSettings).set(values).where(eq(appSettings.id, existing.id)); return { ...existing, ...values }; } const result = await db.insert(appSettings).values(values); return { ...values, id: Number(result[0].insertId) } as AppSettings; }
+export { DEFAULT_MOVIE_RECAP_CONFIG };
