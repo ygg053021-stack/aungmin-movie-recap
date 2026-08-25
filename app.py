@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ PLATFORMS = ("YouTube", "TikTok", "Bilibili", "RedNote", "Facebook")
 RATIOS = {"YouTube": "16:9", "TikTok": "9:16", "Bilibili": "16:9", "RedNote": "9:16", "Facebook": "1:1"}
 OUTPUT_FORMATS = ("MP4", "WAV", "SRT")
 DEFAULT_VOICES = ("Chiron", "Wunna", "Zaw", "Aung", "Thiha")
-DEFAULT_LANGUAGES = ("Burmese", "English", "Thai", "Japanese", "Korean", "Chinese")
+DEFAULT_LANGUAGES = ("Burmese",)
 DEFAULT_VOICE_STYLES = ("Cinematic narrator", "Conversational", "Dramatic", "Calm")
 SUPPORTED_DOMAINS = {
     "YouTube": ("youtube.com", "youtu.be"),
@@ -62,25 +63,56 @@ def recap_prompt(source: SourceInfo, language: str, style: str, voice: str, mode
 def export_metadata(source: SourceInfo, export_format: str, effects: EffectsState) -> str:
     return json.dumps({"format": export_format, "source": source.url, "effects": effects.__dict__}, indent=2)
 
-def generate_gemini_recap(api_key: str, source: SourceInfo, language: str, style: str, voice: str, mode: str) -> str:
-    if source.platform != "YouTube":
-        return "This first live adapter supports public YouTube URLs. TikTok, Bilibili, and RedNote adapters will be added after the YouTube flow is verified."
-    payload = {"model": "gemini-3.6-flash", "input": [{"type": "text", "text": f"Create a cinematic movie recap narration in {language}. Use a {style} tone for the {voice} voice. Return only the narration with scene order and timestamps when useful. Mode: {mode}."}, {"type": "video", "uri": source.url}]}
-    request = Request("https://generativelanguage.googleapis.com/v1beta/interactions", data=json.dumps(payload).encode("utf-8"), headers={"x-goog-api-key": api_key.strip(), "Content-Type": "application/json"}, method="POST")
+def upload_to_gemini(api_key: str, media_path: str) -> str:
+    size = os.path.getsize(media_path)
+    mime = "video/mp4" if media_path.lower().endswith(".mp4") else "video/webm"
+    start = Request("https://generativelanguage.googleapis.com/upload/v1beta/files", data=b"", headers={"x-goog-api-key": api_key.strip(), "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start", "X-Goog-Upload-Header-Content-Length": str(size), "X-Goog-Upload-Header-Content-Type": mime, "Content-Type": "application/json"}, method="POST")
     try:
-        with urlopen(request, timeout=90) as response:
+        with urlopen(start, timeout=60) as response:
+            upload_url = response.headers.get("X-Goog-Upload-URL")
+        if not upload_url:
+            raise ValueError("Gemini did not return a file upload URL.")
+        with open(media_path, "rb") as media:
+            put = Request(upload_url, data=media.read(), headers={"Content-Length": str(size), "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize", "Content-Type": mime}, method="POST")
+            with urlopen(put, timeout=300) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        return data.get("file", {}).get("uri", "")
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise ValueError(f"Gemini could not receive the video ({exc.code}). {detail}") from exc
+    except URLError as exc:
+        raise ValueError("Gemini file upload could not be reached. Try again with a shorter video.") from exc
+
+def generate_gemini_recap(api_key: str, source: SourceInfo, language: str, style: str, voice: str, mode: str, media_path: str | None = None) -> str:
+    if not media_path:
+        raise ValueError("The source video is not available. Upload a video or submit a public link first.")
+    file_uri = upload_to_gemini(api_key, media_path)
+    if not file_uri:
+        raise ValueError("Gemini did not accept the uploaded video.")
+    duration = probe_duration(media_path)
+    target_chars = f"{int(duration * 250)} မှ {int(duration * 300)}" if duration else "ဗီဒီယိုကြာချိန်နှင့် ကိုက်ညီသည့်"
+    prompt = f"""ပေးထားသော ဗီဒီယိုကို အစမှအဆုံး သေချာကြည့်ရှုလေ့လာပါ။ အသံပါလျှင် အသံအကြောင်းအရာကိုပါ နားထောင်ပြီး ရုပ်ပုံ၊ ဇာတ်ဝင်ခန်း၊ ဇာတ်ကောင်အမူအရာ၊ နောက်ခံနှင့် ပြကွက်အပြောင်းအလဲများနှင့် ပေါင်းစပ်စစ်ဆေးပါ။ အသံမပါလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။
+
+မြန်မာဘာသာဖြင့် သဘာဝကျသော ရုပ်ရှင်အကျဉ်းချုပ် ဇာတ်ကြောင်းတစ်ခုသာ ရေးပါ။ အင်္ဂလိပ်စာ၊ မူရင်းဘာသာစကား၊ အမှတ်စဉ်၊ ခေါင်းစဉ်၊ မှတ်ချက်၊ ခွဲခြမ်းစိတ်ဖြာချက်၊ မူရင်းတွင်မပါသောအချက်များ မထည့်ပါနှင့်။ ဇာတ်ကောင်အမည်များကို မြင်ရသလို တိကျစွာ အသုံးပြုပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ စကားပြောများကို သီးခြားစာကြောင်းမခွဲဘဲ ဇာတ်ကြောင်းအတွင်း မျက်တောင်အဖွင့်အပိတ်ဖြင့် ထည့်ပါ။
+
+အဖြစ်အပျက်များကို မူရင်းဗီဒီယိုအစမှအဆုံးထိ အစဉ်လိုက် မချန်ဘဲ ရေးပါ။ ဆဲဆိုမှု၊ အလွန်အမင်းကြမ်းတမ်းသော အသေးစိတ်ဖော်ပြမှုနှင့် ကြော်ငြာမသင့်သော စကားလုံးများကို ရှောင်ပါ။ စာကြောင်းတိုနှင့် အလတ်စားများသုံးပြီး TTS ဖတ်ရာတွင် သဘာဝကျစေရန် ပုဒ်ဖြတ်ပုဒ်ရပ် မှန်ကန်စွာထားပါ။ ဗီဒီယိုကြာချိန်အတွက် မြန်မာစာလုံးရေကို တစ်မိနစ်လျှင် ၂၅၀ မှ ၃၀၀ ဝန်းကျင်၊ စုစုပေါင်း {target_chars} လောက်ဖြစ်အောင် ထိန်းပါ။ ပေးထားသော ဘာသာစကားအတွက်သာ ရေးပါ။ ဇာတ်ကြောင်းပြောဟန်မှာ {style} ဖြစ်ရမည်။ အသံပုံစံမှာ {voice} ဖြစ်ရမည်။ လုပ်ဆောင်ချက်မှာ {mode} ဖြစ်သည်။
+
+အဖြေထဲတွင် မြန်မာ recap စာသားသီးသန့်ကိုသာ ပြန်ပေးပါ။"""
+    payload = {"contents": [{"parts": [{"text": prompt}, {"file_data": {"mime_type": "video/mp4", "file_uri": file_uri}}]}], "generationConfig": {"temperature": 0.25, "maxOutputTokens": 12000}}
+    request = Request("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"x-goog-api-key": api_key.strip(), "Content-Type": "application/json"}, method="POST")
+    try:
+        with urlopen(request, timeout=300) as response:
             data = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:400]
-        raise ValueError(f"Gemini API rejected the request ({exc.code}). Check the key, model access, and that the YouTube video is public. {detail}") from exc
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise ValueError(f"Gemini analysis failed ({exc.code}). {detail}") from exc
     except URLError as exc:
-        raise ValueError("Gemini could not be reached. Check the Streamlit connection and try again.") from exc
-    if data.get("output_text"):
-        return data["output_text"]
-    for item in data.get("outputs", []):
-        if isinstance(item, dict) and item.get("type") == "text" and item.get("text"):
-            return item["text"]
-    raise ValueError("Gemini returned no narration text. Try another public YouTube video.")
+        raise ValueError("Gemini could not be reached while analyzing the video.") from exc
+    parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+    text = "\n".join(part.get("text", "") for part in parts if part.get("text"))
+    if not text.strip():
+        raise ValueError("Gemini returned no narration text. Try a shorter video or another valid video file.")
+    return text.strip()
 
 def download_authorized_source(url: str, workdir: str) -> str:
     import yt_dlp
@@ -96,6 +128,15 @@ def download_authorized_source(url: str, workdir: str) -> str:
     if not videos:
         raise ValueError("No playable video file was returned by the source provider.")
     return str(videos[0])
+
+def probe_duration(media_path: str) -> float:
+    import imageio_ffmpeg
+    result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-i", media_path], capture_output=True, text=True, timeout=60)
+    match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)
+    if not match:
+        return 0.0
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
 
 def make_srt(script: str, path: str) -> None:
     lines = [line.strip() for line in script.splitlines() if line.strip() and not line.startswith("SOURCE:") and not line.startswith("MODE:")]
@@ -152,88 +193,95 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-for name, default in (("source", None), ("script", ""), ("effects", EffectsState()), ("preview_ready", False), ("final_video", None)):
+for name, default in (("source", None), ("script", ""), ("effects", EffectsState()), ("preview_ready", False), ("final_video", None), ("media_path", None)):
     if name not in st.session_state:
         st.session_state[name] = default
 
-st.markdown(f'<div class="brandbar"><div class="brandmark">🎬 &nbsp;{APP_NAME}</div><div class="small">PRIVATE CREATOR WORKSPACE · v0.2</div></div>', unsafe_allow_html=True)
-left, right = st.columns([1.08, 1], gap="large")
+st.markdown(f'<div class="brandbar"><div class="brandmark">🎬 &nbsp;{APP_NAME}</div><div class="small">PRIVATE CREATOR WORKSPACE · v1.0</div></div>', unsafe_allow_html=True)
+left, right = st.columns([1.0, 1.05], gap="large")
 with left:
     st.markdown('<div class="hero"><div class="eyebrow">Cinematic intelligence</div><h1>Turn stories<br>into <span>cinema.</span></h1>', unsafe_allow_html=True)
-    st.markdown(f'<p>{APP_TAGLINE}. Paste an authorized video link, shape the recap, review the final cut, and export only when you are ready.</p></div>', unsafe_allow_html=True)
-    st.markdown('<div class="metricrow"><div class="metric"><b>01</b><span>SOURCE</span></div><div class="metric"><b>02</b><span>RECAP</span></div><div class="metric"><b>03</b><span>CRAFT</span></div><div class="metric"><b>∞</b><span>POSSIBILITY</span></div></div>', unsafe_allow_html=True)
-with right:
-    st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">Production flow</div><div class="ready">● ready</div></div><div class="flow"><span class="on">01 · Source</span><span>02 · Recap</span><span>03 · Voice</span><span>04 · Finish</span></div>', unsafe_allow_html=True)
-    with st.form("source_form"):
-        st.markdown('<div class="section-label">Authorized source</div>', unsafe_allow_html=True)
-        url = st.text_input("Video link", placeholder="YouTube · TikTok · Bilibili · RedNote")
-        a, b = st.columns(2)
-        with a: mode = st.selectbox("Workflow", ["AI Recap", "Subtitle Only"])
-        with b: platform = st.selectbox("Output", PLATFORMS, format_func=lambda x: f"{x} · {RATIOS[x]}")
-        key = st.text_input("Google AI Studio API key", type="password", help="Use your own key. Never commit it to GitHub.")
-        submitted = st.form_submit_button("Fetch source & continue", type="primary", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-if submitted:
-    if not key.strip(): st.error("Google AI Studio API key is required for the BYOK workflow.")
-    else:
-        try: st.session_state.source = inspect_source(url); st.session_state.api_ready = True; st.session_state.api_key = key.strip(); st.success(f"Source accepted · {st.session_state.source.platform} · controls unlocked")
-        except ValueError as exc: st.error(str(exc))
-if st.session_state.source:
-    st.markdown('<div style="height:1.2rem"></div>', unsafe_allow_html=True)
-    preview_col, controls_col = st.columns([1.08, .92], gap="large")
-    with preview_col:
-        st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">Source monitor</div><div class="ready">● connected</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="previewbox"><div><div class="play">▶</div><strong>{st.session_state.source.platform} source ready</strong><br><span class="small">{st.session_state.source.host}</span><br><br><span class="small">The authorized source adapter will fetch a playable stream here.</span></div></div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with controls_col:
-        st.markdown('<div class="panel">', unsafe_allow_html=True)
-        tabs = st.tabs(["Voice", "Effects", "Advanced"])
-        with tabs[0]:
-            voice = st.selectbox("Voice profile", DEFAULT_VOICES); language = st.selectbox("Target language", DEFAULT_LANGUAGES); style = st.selectbox("Narration style", DEFAULT_VOICE_STYLES); speed = st.slider("Audio speed", .75, 1.5, 1.0, .05)
-        with tabs[1]:
-            effects = st.session_state.effects; effects.subtitle_mode = st.selectbox("Subtitle mode", ["Burn (Hardsub)", "File (.srt)"]); effects.subtitle_position = st.selectbox("Subtitle position", ["Bottom", "Middle", "Custom"]); effects.subtitle_size = st.slider("Subtitle size", 20, 64, effects.subtitle_size); effects.logo_position = st.selectbox("Logo position", ["Top Left", "Top Right", "Bottom Left", "Bottom Right"]); effects.blur_strength = st.slider("Blur masks", 0, 100, effects.blur_strength); music = st.file_uploader("Background music", type=["mp3", "wav", "m4a"], key="music"); effects.music_name = music.name if music else effects.music_name
-        with tabs[2]:
-            intro = st.checkbox("Add intro", False); outro = st.checkbox("Add outro", False); auto_color = st.checkbox("Auto color grade", True); flip = st.checkbox("Flip video", False)
-        generate = st.button("Generate recap plan", type="primary", use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    if generate:
-        with st.spinner("Asking Gemini to analyze the public video…"):
+    st.markdown(f'<p>{APP_TAGLINE}. Build the source, recap, voice, and final cut from one control room.</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="metricrow"><div class="metric"><b>01</b><span>SOURCE</span></div><div class="metric"><b>02</b><span>RECAP</span></div><div class="metric"><b>03</b><span>VOICE</span></div><div class="metric"><b>04</b><span>FINISH</span></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">01 · Source monitor</div><div class="ready">● ready</div></div>', unsafe_allow_html=True)
+    input_mode = st.radio("Input type", ["Upload video", "Paste video link"], horizontal=True, key="input_mode")
+    uploaded_video = st.file_uploader("Upload video (.mp4, .mov, .webm, .mkv)", type=["mp4", "mov", "webm", "mkv"]) if input_mode == "Upload video" else None
+    url = st.text_input("Video link", placeholder="YouTube · TikTok · Bilibili · RedNote") if input_mode == "Paste video link" else ""
+    key = st.text_input("Google AI Studio API key", type="password", help="Use your own key. Never commit it to GitHub.")
+    if st.button("Load source", type="primary", use_container_width=True):
+        if not key.strip(): st.error("Google AI Studio API key is required for the BYOK workflow.")
+        elif input_mode == "Upload video" and not uploaded_video: st.error("Choose a video file first.")
+        else:
             try:
-                st.session_state.script = generate_gemini_recap(st.session_state.get("api_key", ""), st.session_state.source, language, style, voice, mode)
-                st.session_state.preview_ready = False
-                st.success("Gemini recap ready. Edit the narration, then start processing.")
-            except ValueError as exc:
-                st.error(str(exc))
-if st.session_state.script:
-    st.markdown('<div style="height:1.2rem"></div>', unsafe_allow_html=True)
-    script_col, final_col = st.columns([1, 1], gap="large")
-    with script_col:
-        st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">Recap script desk</div><div class="ready">● editable</div></div>', unsafe_allow_html=True)
-        st.session_state.script = st.text_area("Edit narration before processing", st.session_state.script, height=240)
-        if st.button("Start processing", type="primary", use_container_width=True):
-            with st.spinner("Downloading, creating subtitles, generating voiceover, and rendering MP4…"):
+                if input_mode == "Upload video":
+                    suffix = Path(uploaded_video.name).suffix.lower() or ".mp4"
+                    media_path = str(Path(tempfile.gettempdir()) / f"aungmin_source{suffix}")
+                    Path(media_path).write_bytes(uploaded_video.getvalue())
+                    st.session_state.media_path = media_path; st.session_state.source = SourceInfo(f"upload://{uploaded_video.name}", "Upload", uploaded_video.name)
+                else:
+                    st.session_state.source = inspect_source(url); st.session_state.media_path = None
+                st.session_state.api_key = key.strip(); st.success(f"Source loaded · {st.session_state.source.platform}")
+            except ValueError as exc: st.error(str(exc))
+    if st.session_state.source:
+        st.markdown(f'<div class="previewbox" style="min-height:230px"><div><div class="play">▶</div><strong>{st.session_state.source.platform} source ready</strong><br><span class="small">{st.session_state.source.host}</span></div></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+with right:
+    st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">Production control room</div><div class="ready">● all sections available</div></div><div class="flow"><span class="on">01 · Source</span><span class="on">02 · Recap</span><span class="on">03 · Voice</span><span class="on">04 · Finish</span></div>', unsafe_allow_html=True)
+    with st.expander("02 · RECAP — story and script", expanded=True):
+        mode = st.selectbox("Workflow", ["AI Recap", "Subtitle Only"])
+        style = st.selectbox("Narration style", DEFAULT_VOICE_STYLES)
+        detail = st.select_slider("Scene detail", options=["Essential", "Balanced", "Scene-by-scene"], value="Scene-by-scene")
+        st.caption("အသံမပါလျှင် မြင်ကွင်းကိုကြည့်ပြီး၊ အသံပါလျှင် အသံနှင့်မြင်ကွင်းနှစ်မျိုးလုံးကို အခြေခံ၍ မြန်မာ recap ရေးမည်။")
+        generate = st.button("Generate Burmese recap", type="primary", use_container_width=True)
+    with st.expander("03 · VOICE — Burmese narration", expanded=True):
+        voice = st.selectbox("Voice profile", DEFAULT_VOICES)
+        language = st.selectbox("Target language", DEFAULT_LANGUAGES)
+        speed = st.slider("Audio speed", .75, 1.5, 1.0, .05)
+    with st.expander("04 · FINISH — subtitles and video", expanded=True):
+        platform = st.selectbox("Output format", PLATFORMS, format_func=lambda x: f"{x} · {RATIOS[x]}")
+        effects = st.session_state.effects
+        effects.subtitle_mode = st.selectbox("Subtitle mode", ["Burn (Hardsub)", "File (.srt)"])
+        effects.subtitle_position = st.selectbox("Subtitle position", ["Bottom", "Middle", "Custom"])
+        effects.subtitle_size = st.slider("Subtitle size", 20, 64, effects.subtitle_size)
+        effects.logo_position = st.selectbox("Logo position", ["Top Left", "Top Right", "Bottom Left", "Bottom Right"])
+        effects.blur_strength = st.slider("Blur masks", 0, 100, effects.blur_strength)
+        music = st.file_uploader("Background music", type=["mp3", "wav", "m4a"], key="music")
+        effects.music_name = music.name if music else effects.music_name
+        logo = st.file_uploader("Logo (optional)", type=["png", "jpg", "jpeg"], key="logo")
+        intro = st.checkbox("Add intro", False); outro = st.checkbox("Add outro", False); flip = st.checkbox("Flip video", False)
+    if generate:
+        if not st.session_state.get("source") or not st.session_state.get("api_key"): st.error("Load a source and API key first. All four sections remain available before loading.")
+        else:
+            with st.spinner("Analyzing visuals and audio, then writing Burmese recap…"):
+                try:
+                    media_path = st.session_state.get("media_path")
+                    if not media_path:
+                        with tempfile.TemporaryDirectory() as fetch_dir:
+                            downloaded = download_authorized_source(st.session_state.source.url, fetch_dir)
+                            media_path = str(Path(tempfile.gettempdir()) / "aungmin_link_source.mp4")
+                            Path(media_path).write_bytes(Path(downloaded).read_bytes())
+                            st.session_state.media_path = media_path
+                    st.session_state.script = generate_gemini_recap(st.session_state.api_key, st.session_state.source, language, style, voice, mode, media_path)
+                    st.session_state.preview_ready = False; st.success("Burmese recap script ready. Edit it below before rendering.")
+                except (ValueError, ImportError) as exc: st.error(str(exc))
+    if st.session_state.script:
+        st.markdown('<div class="section-label">Editable Burmese recap</div>', unsafe_allow_html=True)
+        st.session_state.script = st.text_area("Recap script", st.session_state.script, height=250)
+        if st.button("Render final recap video", type="primary", use_container_width=True):
+            with st.spinner("Creating Burmese voiceover, subtitles, and final MP4…"):
                 try:
                     with tempfile.TemporaryDirectory() as workdir:
-                        source_path = download_authorized_source(st.session_state.source.url, workdir)
-                        srt_path = str(Path(workdir) / "captions.srt")
-                        voice_path = str(Path(workdir) / "voice.mp3")
-                        output_path = str(Path(workdir) / "aungmin-recap.mp4")
-                        make_srt(st.session_state.script, srt_path)
-                        create_voiceover(st.session_state.script, voice_path, language)
-                        render_mp4(source_path, srt_path, voice_path, output_path, st.session_state.effects, RATIOS[platform])
+                        source_path = st.session_state.get("media_path") or download_authorized_source(st.session_state.source.url, workdir)
+                        srt_path = str(Path(workdir) / "captions.srt"); voice_path = str(Path(workdir) / "voice.mp3"); output_path = str(Path(workdir) / "aungmin-recap.mp4")
+                        make_srt(st.session_state.script, srt_path); create_voiceover(st.session_state.script, voice_path, language); render_mp4(source_path, srt_path, voice_path, output_path, st.session_state.effects, RATIOS[platform])
                         st.session_state.final_video = Path(output_path).read_bytes()
-                    st.session_state.preview_ready = True
-                    st.success("MP4 rendering complete. Review the final preview before download.")
-                except (ValueError, ImportError) as exc:
-                    st.session_state.preview_ready = False
-                    st.error(str(exc))
-        st.markdown('</div>', unsafe_allow_html=True)
-    with final_col:
-        st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">Final preview gate</div><div class="ready">● review before export</div></div>', unsafe_allow_html=True)
-        if st.session_state.preview_ready and st.session_state.get("final_video"):
-            st.video(st.session_state.final_video); st.caption("Preview gate passed · export actions are now available"); st.download_button("Download final MP4", st.session_state.final_video, file_name="aungmin-movie-recap.mp4", mime="video/mp4")
-        elif st.session_state.preview_ready:
-            st.warning("The renderer did not return a video file. Check the message above and try again.")
-        else: st.markdown('<div class="previewbox"><div><div class="play">◌</div><strong>Preview locked</strong><br><span class="small">Complete processing to review before export.</span></div></div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+                    st.session_state.preview_ready = True; st.success("Final MP4 ready. Review it below before downloading.")
+                except (ValueError, ImportError) as exc: st.error(str(exc))
+    st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('<div class="small" style="margin-top:2.5rem">Use only media you own or have permission to process. Platform access and download behavior depends on provider rules and your configured source adapter.</div>', unsafe_allow_html=True)
+if st.session_state.get("final_video"):
+    st.markdown('<div style="height:1.2rem"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">Final preview gate</div><div class="ready">● review before export</div></div>', unsafe_allow_html=True)
+    st.video(st.session_state.final_video)
+    st.download_button("Download final MP4", st.session_state.final_video, file_name="aungmin-movie-recap.mp4", mime="video/mp4")
+    st.markdown('</div>', unsafe_allow_html=True)
