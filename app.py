@@ -65,7 +65,7 @@ def export_metadata(source: SourceInfo, export_format: str, effects: EffectsStat
 def generate_gemini_recap(api_key: str, source: SourceInfo, language: str, style: str, voice: str, mode: str) -> str:
     if source.platform != "YouTube":
         return "This first live adapter supports public YouTube URLs. TikTok, Bilibili, and RedNote adapters will be added after the YouTube flow is verified."
-    payload = {"model": "gemini-2.5-flash", "input": [{"type": "text", "text": f"Create a cinematic movie recap narration in {language}. Use a {style} tone for the {voice} voice. Return only the narration with scene order and timestamps when useful. Mode: {mode}."}, {"type": "video", "uri": source.url}]}
+    payload = {"model": "gemini-3.6-flash", "input": [{"type": "text", "text": f"Create a cinematic movie recap narration in {language}. Use a {style} tone for the {voice} voice. Return only the narration with scene order and timestamps when useful. Mode: {mode}."}, {"type": "video", "uri": source.url}]}
     request = Request("https://generativelanguage.googleapis.com/v1beta/interactions", data=json.dumps(payload).encode("utf-8"), headers={"x-goog-api-key": api_key.strip(), "Content-Type": "application/json"}, method="POST")
     try:
         with urlopen(request, timeout=90) as response:
