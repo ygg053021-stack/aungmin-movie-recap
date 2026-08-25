@@ -84,6 +84,29 @@ def save_uploaded_file(uploaded, prefix: str) -> str:
     return str(path)
 
 
+def prepare_quick_media(media_path: str) -> str:
+    """Create a small analysis proxy so Quick Recap does not upload a huge original."""
+    import imageio_ffmpeg
+    source_duration = probe_duration(media_path)
+    # Keep enough context for a short recap while preventing runaway uploads.
+    max_seconds = min(max(source_duration, 1.0), 180.0) if source_duration else 180.0
+    quick_path = str(Path(tempfile.gettempdir()) / f"aungmin-quick-{os.getpid()}.mp4")
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    command = [
+        ffmpeg, "-y", "-i", media_path, "-t", f"{max_seconds:.2f}",
+        "-vf", "scale=-2:360,fps=2", "-c:v", "libx264", "-preset", "ultrafast",
+        "-crf", "32", "-c:a", "aac", "-b:a", "48k", "-ac", "1", "-ar", "16000",
+        "-movflags", "+faststart", quick_path,
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("Quick preview preparation timed out. Try a shorter video.") from exc
+    if result.returncode != 0 or not Path(quick_path).exists():
+        raise ValueError("Quick preview could not be prepared. Try an MP4 or a shorter video.")
+    return quick_path
+
+
 def download_authorized_source(url: str) -> str:
     import yt_dlp
     workdir = tempfile.mkdtemp(prefix="aungmin-source-")
@@ -170,19 +193,20 @@ def extract_gemini_text(data: dict) -> str:
 
 
 def generate_recap_bundle(api_key: str, source: SourceInfo, media_path: str, style: str, detail: str, speed: float, flipped: bool) -> dict:
-    file_uri = upload_to_gemini(api_key, media_path)
-    duration = probe_duration(media_path)
-    target = f"{int(duration * 250)} မှ {int(duration * 300)}" if duration else "video ကြာချိန်နှင့် ကိုက်ညီသည့်"
+    quick_path = prepare_quick_media(media_path)
+    file_uri = upload_to_gemini(api_key, quick_path)
+    duration = probe_duration(quick_path)
+    target = "၅၀၀ မှ ၇၀၀" if duration else "တိုတောင်းပြီး အဓိကအချက်များပါဝင်သည့်"
     prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။
 
-မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ Scene အစဉ်မလွဲပါနှင့်။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ Target length သည် တစ်မိနစ် ၂၅၀ မှ ၃၀၀ မြန်မာစာလုံး၊ စုစုပေါင်း {target} ဝန်းကျင် ဖြစ်ရမည်။ Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
+မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ Scene အစဉ်မလွဲပါနှင့်။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ Target length သည် Quick Recap အတွက် ၅၀၀ မှ ၇၀၀ မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ တစ်မိနစ်ခန့်အတွင်း ဖတ်ပြီးဆုံးနိုင်အောင် တိုတောင်းစွာရေးပါ။ Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
 
-JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ Markdown မသုံးပါနှင့်။ JSON key သုံးခုကို အောက်ပါအတိုင်း တိတိကျကျသုံးပါ:
-{{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မူရင်း video စကားပြော/အသံအကြောင်းအရာကို မြန်မာလို စာတန်းထိုးရန် စာမူ","subtitle_en":"မူရင်း video စကားပြော/အသံအကြောင်းအရာကို အင်္ဂလိပ်လို စာတန်းထိုးရန် စာမူ"}}
+JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ Markdown မသုံးပါနှင့်။ JSON key နှစ်ခုကို အောက်ပါအတိုင်း တိတိကျကျသုံးပါ:
+{{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မြန်မာစာတန်းထိုးရန် စာမူ"}}
 """
     payload = {
         "contents": [{"parts": [{"text": prompt}, {"file_data": {"mime_type": "video/mp4", "file_uri": file_uri}}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 16000},
+        "generationConfig": {"temperature": 0.15, "maxOutputTokens": 4500},
     }
     request = Request(
         f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent",
@@ -191,7 +215,7 @@ JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ M
         method="POST",
     )
     try:
-        with urlopen(request, timeout=600) as response:
+        with urlopen(request, timeout=150) as response:
             data = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:700]
@@ -252,7 +276,7 @@ def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_p
     import imageio_ffmpeg
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     subtitle_path = srt_path.replace("\\", "/").replace(":", "\\:")
-    video_filters = [f"subtitles='{subtitle_path}'"]
+    video_filters = ["scale=-2:720", f"subtitles='{subtitle_path}'"]
     if effects.blur_strength > 0:
         video_filters.append(f"boxblur={max(1, effects.blur_strength // 12)}:1")
     if effects.flip:
@@ -277,13 +301,30 @@ def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_p
         command += ["-map", "2:a:0"]
     else:
         command += ["-map", "0:a:0?"]
-    command += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-shortest", "-movflags", "+faststart", output_path]
+    command += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-c:a", "aac", "-shortest", "-movflags", "+faststart", output_path]
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=900)
     except subprocess.TimeoutExpired as exc:
         raise ValueError("Rendering timed out. Try a shorter video.") from exc
     if result.returncode != 0:
         raise ValueError(f"MP4 rendering failed: {result.stderr[-700:]}")
+
+
+def embed_preview_html(source: SourceInfo) -> str | None:
+    """Return a browser preview for providers that expose an embed URL."""
+    if source.platform != "YouTube":
+        return None
+    parsed = urlparse(source.url)
+    video_id = parsed.path.rstrip("/").split("/")[-1] if "youtu.be" in (parsed.hostname or "") else ""
+    if parsed.query:
+        from urllib.parse import parse_qs
+        video_id = parse_qs(parsed.query).get("v", [video_id])[0]
+    if not video_id:
+        return None
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "", video_id)
+    if not safe_id:
+        return None
+    return f'''<style>html,body{{margin:0;background:#090d1b;overflow:hidden}}iframe{{width:100%;height:380px;border:0;border-radius:18px;background:#10172b}}</style><iframe src="https://www.youtube-nocookie.com/embed/{safe_id}?rel=0" title="YouTube preview" allowfullscreen></iframe>'''
 
 
 def preview_html(media_path: str, state: EditorState, final: bool = False) -> str:
@@ -316,7 +357,7 @@ st.markdown("""
 :root{color-scheme:dark}
 [data-testid="stAppViewContainer"]{background:radial-gradient(circle at 82% 0%,rgba(24,82,92,.42),transparent 32%),radial-gradient(circle at 10% 46%,rgba(63,24,100,.46),transparent 35%),#070a14}
 [data-testid="stHeader"]{background:rgba(5,7,16,.72)}
-.block-container{max-width:1540px;padding:.65rem clamp(.8rem,2.3vw,2.5rem) 1rem;overflow:hidden}
+.block-container{max-width:1540px;padding:.65rem clamp(.8rem,2.3vw,2.5rem) 1.4rem;overflow:visible}
 .brandbar{height:42px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.13);color:#f4f6ff;font-weight:800;letter-spacing:-.03em}
 .brandbar small{color:#8de8db;font-size:.64rem;letter-spacing:.16em;text-transform:uppercase}
 .workspace{padding-top:.7rem}
@@ -334,7 +375,7 @@ div[data-testid="stButton"]>button[kind="primary"],button[kind="primaryFormSubmi
 [data-testid="stTabs"] button{color:#98a2ba!important;font-weight:800!important;font-size:.72rem!important}
 [data-testid="stTabs"] button[aria-selected="true"]{color:#75eadb!important}
 [data-testid="stAlert"]{color:#edf0f8}
-@media(max-width:900px){.block-container{overflow:auto}.panel{padding:.8rem}.brandbar small{font-size:.56rem}.stage{height:260px}.empty-preview{height:260px}}
+@media(max-width:900px){.block-container{overflow:visible}.panel{padding:.8rem}.brandbar small{font-size:.56rem}.stage{height:260px}.empty-preview{height:260px}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -356,7 +397,14 @@ with left:
     with source_tab:
         st.markdown('<div class="stage-label"><span>Original video</span><span>01 · SOURCE</span></div>', unsafe_allow_html=True)
         if st.session_state.media_path:
-            components.html(preview_html(st.session_state.media_path, editor), height=405, scrolling=False)
+            st.video(st.session_state.media_path, start_time=0)
+        elif st.session_state.source and st.session_state.source.url.startswith(("http://", "https://")):
+            embedded = embed_preview_html(st.session_state.source)
+            if embedded:
+                components.html(embedded, height=405, scrolling=False)
+                st.caption("Preview ပြထားသော်လည်း provider download ခွင့်မပေးပါက recap အတွက် video file upload လုပ်ပါ။")
+            else:
+                st.markdown('<div class="empty-preview">ဒီ provider မှာ browser preview မရပါ။ Recap ဆက်လုပ်ရန် ကိုယ်ပိုင်/ခွင့်ပြုချက်ရ video file ကို upload လုပ်ပါ။</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="empty-preview">Upload a video or load an authorized public link.</div>', unsafe_allow_html=True)
     with final_tab:
@@ -364,7 +412,7 @@ with left:
         if st.session_state.final_video:
             final_path = str(Path(tempfile.gettempdir()) / "aungmin-final-preview.mp4")
             Path(final_path).write_bytes(st.session_state.final_video)
-            components.html(preview_html(final_path, editor, final=True), height=405, scrolling=False)
+            st.video(final_path, start_time=0)
             st.download_button("Download final MP4", st.session_state.final_video, file_name="aungmin-movie-recap.mp4", mime="video/mp4", use_container_width=True)
         else:
             st.markdown('<div class="empty-preview">Render the recap to unlock the final preview.</div>', unsafe_allow_html=True)
@@ -391,19 +439,26 @@ with right:
                     st.session_state.source = SourceInfo(f"upload://{uploaded.name}", "Upload", uploaded.name, uploaded.name)
                 else:
                     source = inspect_source(source_url)
-                    with st.spinner("Loading the original source video…"):
-                        st.session_state.media_path = download_authorized_source(source.url)
                     st.session_state.source = source
+                    try:
+                        with st.spinner("Loading the original source video…"):
+                            st.session_state.media_path = download_authorized_source(source.url)
+                    except ValueError as exc:
+                        st.session_state.media_path = None
+                        st.warning(f"Link preview ရနိုင်သော်လည်း download မရပါ: {exc}")
                 st.session_state.final_video = None
                 st.session_state.bundle = None
-                st.success("Original video loaded. Preview is ready on the left.")
+                if st.session_state.media_path:
+                    st.success("Original video loaded. Preview is ready on the left.")
+                else:
+                    st.info("Link information loaded. Browser preview is available when the provider supports embedding; upload the file to create a recap.")
             except (ValueError, ImportError) as exc:
                 st.error(str(exc))
     with tabs[1]:
-        style = st.selectbox("Recap narration style", ["Cinematic narrator", "Conversational", "Dramatic", "Calm"], key="recap_style")
-        detail = st.select_slider("Scene coverage", ["Essential", "Balanced", "Scene-by-scene"], value="Scene-by-scene", key="scene_detail")
-        st.markdown('<div class="section-note">အသံမပါလျှင် AI က မြင်ကွင်းများကို ကြည့်ပြီးရေးမည်။ အသံပါလျှင် မြင်ကွင်းနှင့် dialogue/audio အကြောင်းအရာ နှစ်မျိုးလုံးကို ပေါင်းစပ်ရေးမည်။</div>', unsafe_allow_html=True)
-        if st.button("Generate Burmese recap", type="primary", use_container_width=True):
+        style = st.selectbox("Recap narration style / ဇာတ်ကြောင်းပြောဟန်", ["ရုပ်ရှင်ဆန်သော ဇာတ်ကြောင်းပြောဟန်", "စိတ်လှုပ်ရှားဖွယ် ဇာတ်ကြောင်းပြောဟန်", "တည်ငြိမ်ပြီး ရှင်းလင်းသောဟန်", "လျှို့ဝှက်ဆန်းကြယ်သောဟန်", "ဝမ်းနည်းနက်ရှိုင်းသောဟန်"], index=0, key="recap_style")
+        detail = "Essential"
+        st.markdown('<div class="section-note">Quick Recap သည် အဓိကမြင်ကွင်းများကိုသာ အမြန်ရွေးချယ်ပြီး မြန်မာဇာတ်ကြောင်း၊ မြန်မာအသံနှင့် မြန်မာစာတန်းထိုးအတွက် ပြင်ဆင်မည်။</div>', unsafe_allow_html=True)
+        if st.button("Quick Recap စတင်မယ်", type="primary", use_container_width=True):
             if not st.session_state.media_path or not st.session_state.source:
                 st.error("Load the original video first. API key is used only when generating the recap.")
             elif not st.session_state.api_key:
@@ -412,35 +467,29 @@ with right:
                 with st.spinner("Analyzing video visuals/audio and writing Burmese recap…"):
                     try:
                         st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip)
-                        st.success("Burmese recap, Burmese subtitle, and English subtitle drafts are ready.")
+                        st.success("မြန်မာ recap၊ မြန်မာ voice နှင့် မြန်မာ subtitle အတွက် ပြင်ဆင်ပြီးပါပြီ။")
                     except (ValueError, ImportError) as exc:
                         st.error(str(exc))
         if st.session_state.bundle:
             st.text_area("Editable Burmese recap", st.session_state.bundle["recap_bn"], height=170, key="editable_recap")
             st.caption("Edit this narration before rendering. Changes are applied to the voiceover and subtitle timing.")
     with tabs[2]:
-        voice_name = st.selectbox("Voice profile", VOICE_NAMES, index=0, key="voice_name")
-        audio_speed = st.slider("Narration speed", .75, 1.5, 1.0, .05, key="audio_speed")
-        st.markdown('<div class="section-note">Burmese recap voiceover ကိုရွေးထားတဲ့ voice profile နဲ့ ထုတ်မည်။ မူရင်းအသံကို music နှင့် narration အဖြစ် မရောမီ သီးခြားထိန်းမည်။</div>', unsafe_allow_html=True)
+        voice_labels = {"my-MM-NilarNeural": "အမျိုးသမီးအသံ — ကြည်လင်ပြီး တည်ငြိမ်သောဟန်", "my-MM-ThihaNeural": "အမျိုးသားအသံ — နက်ရှိုင်းပြီး ရုပ်ရှင်ဆန်သောဟန်", "en-US-AriaNeural": "အင်္ဂလိပ်အသံ — အရေးပေါ်အစားထိုးအသံ"}
+        voice_name = st.selectbox("Voice profile / မြန်မာအသံပုံစံ", list(VOICE_NAMES), index=0, format_func=lambda name: voice_labels.get(name, name), key="voice_name")
+        audio_speed = 1.0
+        st.markdown('<div class="section-note">ရွေးထားသော မြန်မာအသံပုံစံဖြင့် narration ထုတ်မည်။ အသံနှင့် မြန်မာစာတန်းထိုးကို တစ်ကြိမ်တည်း render လုပ်မည်။</div>', unsafe_allow_html=True)
     with tabs[3]:
-        preset = st.selectbox("Authorized-media edit preset", ["Manual", "Cinematic crop", "Vertical short", "Mirror + punchy speed"], key="edit_preset")
-        editor.speed = st.slider("Video speed", .5, 2.0, editor.speed, .05, key="video_speed")
-        editor.flip = st.checkbox("Horizontal flip", editor.flip, key="video_flip")
-        st.markdown('<div class="section-note">ဒီ controls တွေက ကိုယ်ပိုင်/ခွင့်ပြုချက်ရ media အတွက် creative edit ဖြစ်ပြီး copyrighted media ကို copyright-free မလုပ်ပေးပါ။</div>', unsafe_allow_html=True)
-        editor.blur_strength = st.slider("Blur strength", 0, 100, editor.blur_strength, key="blur_strength")
-        blur_cols = st.columns(4)
-        editor.blur_x = blur_cols[0].number_input("Blur X %", 0, 90, editor.blur_x, key="blur_x")
-        editor.blur_y = blur_cols[1].number_input("Blur Y %", 0, 90, editor.blur_y, key="blur_y")
-        editor.blur_w = blur_cols[2].number_input("Blur W %", 5, 100, editor.blur_w, key="blur_w")
-        editor.blur_h = blur_cols[3].number_input("Blur H %", 5, 100, editor.blur_h, key="blur_h")
-        editor.subtitle_mode = st.selectbox("Subtitle layers", ["Burmese + English", "Burmese only", "English only"], key="subtitle_mode")
-        editor.subtitle_position = st.selectbox("Subtitle position", ["Bottom", "Middle", "Top"], key="subtitle_position")
-        editor.subtitle_size = st.slider("Subtitle size", 18, 64, editor.subtitle_size, key="subtitle_size")
-        editor.subtitle_offset = st.slider("Subtitle timing offset", -3.0, 3.0, editor.subtitle_offset, .1, key="subtitle_offset")
+        st.markdown("**အလိုအလျောက်ပြင်ဆင်မှု** — မြန်မာ recap အတွက် ရိုးရှင်းသော output")
+        editor.speed = 1.0
+        editor.flip = False
+        editor.blur_strength = 28 if st.checkbox("Blur ထည့်မယ်", value=editor.blur_strength > 0, key="blur_enabled") else 0
+        editor.subtitle_mode = "Burmese only"
+        editor.subtitle_position = "Bottom"
+        editor.subtitle_size = 34
+        editor.subtitle_offset = 0.0
         output_platform = st.selectbox("Output format", PLATFORMS, format_func=lambda item: f"{item} · {RATIOS[item]}", key="output_platform")
-        music = st.file_uploader("Background music", type=["mp3", "wav", "m4a"], key="background_music")
-        music_path = save_uploaded_file(music, "aungmin-music") if music else None
-        st.markdown('<div class="section-note">Preview ထဲက turquoise rectangle က manual blur region ကိုပြသည်။ လက်ရှိ UI မှာ X/Y/W/H နဲ့ ချိန်နိုင်ပြီး render မှာ blur strength ကို အသုံးချမည်။</div>', unsafe_allow_html=True)
+        music_path = None
+        st.markdown('<div class="section-note">Blur ကို privacy/editing အတွက်သာ အသုံးပြုမည်။ Final video တွင် မြန်မာ voice narration နှင့် မြန်မာ subtitle တစ်မျိုးတည်း ပါမည်။</div>', unsafe_allow_html=True)
         if st.button("Render final recap video", type="primary", use_container_width=True):
             if not st.session_state.bundle:
                 st.error("Generate and review the Burmese recap first.")
