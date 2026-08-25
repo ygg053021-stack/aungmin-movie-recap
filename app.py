@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -87,14 +88,23 @@ def download_authorized_source(url: str) -> str:
     import yt_dlp
     workdir = tempfile.mkdtemp(prefix="aungmin-source-")
     output = str(Path(workdir) / "source.%(ext)s")
+    ffmpeg_location = shutil.which("ffmpeg")
+    if not ffmpeg_location:
+        try:
+            import imageio_ffmpeg
+            ffmpeg_location = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            ffmpeg_location = None
     options = {
         "outtmpl": output,
-        "format": "bv*+ba/b",
-        "merge_output_format": "mp4",
+        "format": "bv*+ba/b" if ffmpeg_location else "best[ext=mp4]/best",
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
     }
+    if ffmpeg_location:
+        options["ffmpeg_location"] = ffmpeg_location
+        options["merge_output_format"] = "mp4"
     try:
         with yt_dlp.YoutubeDL(options) as downloader:
             downloader.download([url])
@@ -103,7 +113,8 @@ def download_authorized_source(url: str) -> str:
     videos = [p for p in Path(workdir).glob("source.*") if p.suffix.lower() in {".mp4", ".webm", ".mkv", ".mov"}]
     if not videos:
         raise ValueError("The provider did not return a playable video file.")
-    target = Path(tempfile.gettempdir()) / "aungmin-link-source.mp4"
+    # Preserve the provider's actual container so Gemini/FFmpeg receive the correct MIME type.
+    target = Path(tempfile.gettempdir()) / f"aungmin-link-source{videos[0].suffix.lower()}"
     target.write_bytes(videos[0].read_bytes())
     return str(target)
 
@@ -371,6 +382,7 @@ with right:
         uploaded = st.file_uploader("Upload video file", type=["mp4", "mov", "webm", "mkv"], key="source_upload") if mode == "Upload video" else None
         source_url = st.text_input("Video link", placeholder="YouTube · TikTok · Bilibili · RedNote · public URL", key="source_url") if mode == "Paste video link" else ""
         st.caption("Public/authorized media only. Link loading depends on provider access rules.")
+        st.session_state.api_key = st.text_input("Google AI Studio API key", type="password", key="api_key_input", help="Session-only key. Never commit it to GitHub.")
         if st.button("Load original video", type="primary", use_container_width=True):
             try:
                 if mode == "Upload video":
