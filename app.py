@@ -1,6 +1,8 @@
 import json
 from dataclasses import dataclass
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 import streamlit as st
 
@@ -55,6 +57,26 @@ def recap_prompt(source: SourceInfo, language: str, style: str, voice: str, mode
 def export_metadata(source: SourceInfo, export_format: str, effects: EffectsState) -> str:
     return json.dumps({"format": export_format, "source": source.url, "effects": effects.__dict__}, indent=2)
 
+def generate_gemini_recap(api_key: str, source: SourceInfo, language: str, style: str, voice: str, mode: str) -> str:
+    if source.platform != "YouTube":
+        return "This first live adapter supports public YouTube URLs. TikTok, Bilibili, and RedNote adapters will be added after the YouTube flow is verified."
+    payload = {"model": "gemini-2.5-flash", "input": [{"type": "text", "text": f"Create a cinematic movie recap narration in {language}. Use a {style} tone for the {voice} voice. Return only the narration with scene order and timestamps when useful. Mode: {mode}."}, {"type": "video", "uri": source.url}]}
+    request = Request("https://generativelanguage.googleapis.com/v1beta/interactions", data=json.dumps(payload).encode("utf-8"), headers={"x-goog-api-key": api_key.strip(), "Content-Type": "application/json"}, method="POST")
+    try:
+        with urlopen(request, timeout=90) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:400]
+        raise ValueError(f"Gemini API rejected the request ({exc.code}). Check the key, model access, and that the YouTube video is public. {detail}") from exc
+    except URLError as exc:
+        raise ValueError("Gemini could not be reached. Check the Streamlit connection and try again.") from exc
+    if data.get("output_text"):
+        return data["output_text"]
+    for item in data.get("outputs", []):
+        if isinstance(item, dict) and item.get("type") == "text" and item.get("text"):
+            return item["text"]
+    raise ValueError("Gemini returned no narration text. Try another public YouTube video.")
+
 st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""
 <style>
@@ -86,7 +108,7 @@ with right:
 if submitted:
     if not key.strip(): st.error("Google AI Studio API key is required for the BYOK workflow.")
     else:
-        try: st.session_state.source = inspect_source(url); st.session_state.api_ready = True; st.success(f"Source accepted · {st.session_state.source.platform} · controls unlocked")
+        try: st.session_state.source = inspect_source(url); st.session_state.api_ready = True; st.session_state.api_key = key.strip(); st.success(f"Source accepted · {st.session_state.source.platform} · controls unlocked")
         except ValueError as exc: st.error(str(exc))
 if st.session_state.source:
     st.markdown('<div style="height:1.2rem"></div>', unsafe_allow_html=True)
@@ -107,7 +129,13 @@ if st.session_state.source:
         generate = st.button("Generate recap plan", type="primary", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     if generate:
-        st.session_state.script = recap_prompt(st.session_state.source, language, style, voice, mode); st.session_state.preview_ready = False; st.info("Recap plan prepared. Connect the server-side AI/media adapters to render the actual video.")
+        with st.spinner("Asking Gemini to analyze the public video…"):
+            try:
+                st.session_state.script = generate_gemini_recap(st.session_state.get("api_key", ""), st.session_state.source, language, style, voice, mode)
+                st.session_state.preview_ready = False
+                st.success("Gemini recap ready. Edit the narration, then start processing.")
+            except ValueError as exc:
+                st.error(str(exc))
 if st.session_state.script:
     st.markdown('<div style="height:1.2rem"></div>', unsafe_allow_html=True)
     script_col, final_col = st.columns([1, 1], gap="large")
