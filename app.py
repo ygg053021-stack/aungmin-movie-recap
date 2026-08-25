@@ -1,5 +1,10 @@
+import asyncio
 import json
+import os
+import subprocess
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -77,6 +82,69 @@ def generate_gemini_recap(api_key: str, source: SourceInfo, language: str, style
             return item["text"]
     raise ValueError("Gemini returned no narration text. Try another public YouTube video.")
 
+def download_authorized_source(url: str, workdir: str) -> str:
+    import yt_dlp
+    output = str(Path(workdir) / "source.%(ext)s")
+    options = {"outtmpl": output, "format": "bv*+ba/b", "merge_output_format": "mp4", "noplaylist": True, "quiet": True, "no_warnings": True}
+    try:
+        with yt_dlp.YoutubeDL(options) as downloader:
+            downloader.download([url])
+    except Exception as exc:
+        raise ValueError(f"Source download failed. Use a public video you own or have permission to process. {exc}") from exc
+    candidates = sorted(Path(workdir).glob("source.*"))
+    videos = [p for p in candidates if p.suffix.lower() in {".mp4", ".webm", ".mkv", ".mov"}]
+    if not videos:
+        raise ValueError("No playable video file was returned by the source provider.")
+    return str(videos[0])
+
+def make_srt(script: str, path: str) -> None:
+    lines = [line.strip() for line in script.splitlines() if line.strip() and not line.startswith("SOURCE:") and not line.startswith("MODE:")]
+    lines = lines[:120] or ["AungMin Movie Recap"]
+    with open(path, "w", encoding="utf-8") as handle:
+        for index, line in enumerate(lines, 1):
+            start = (index - 1) * 4
+            end = start + 4
+            def stamp(seconds: int) -> str:
+                return f"00:{seconds // 60:02d}:{seconds % 60:02d},000"
+            handle.write(f"{index}\n{stamp(start)} --> {stamp(end)}\n{line[:160]}\n\n")
+
+def create_voiceover(script: str, path: str, language: str) -> None:
+    try:
+        import edge_tts
+        voice = "my-MM-NilarNeural" if language == "Burmese" else "en-US-AriaNeural"
+        async def save_audio() -> None:
+            await edge_tts.Communicate(script[:6000], voice).save(path)
+        asyncio.run(save_audio())
+    except Exception as exc:
+        raise ValueError(f"Voiceover generation failed. Check the server connection and try again. {exc}") from exc
+
+def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_path: str, effects: EffectsState, ratio: str) -> None:
+    import imageio_ffmpeg
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    subtitle_path = srt_path.replace("\\", "/").replace(":", "\\:")
+    vf = f"subtitles='{subtitle_path}'"
+    if effects.blur_strength > 0:
+        vf += f",boxblur={max(1, effects.blur_strength // 12)}:1"
+    if ratio == "9:16":
+        vf += ",crop=ih*9/16:ih"
+    elif ratio == "1:1":
+        vf += ",crop=ih:ih"
+    command = [ffmpeg, "-y", "-i", source_path]
+    if voice_path:
+        command += ["-i", voice_path]
+    command += ["-vf", vf, "-map", "0:v:0"]
+    if voice_path:
+        command += ["-map", "1:a:0", "-shortest"]
+    else:
+        command += ["-map", "0:a:0?", "-shortest"]
+    command += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-movflags", "+faststart", output_path]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("Rendering timed out. Try a shorter video.") from exc
+    if result.returncode != 0:
+        raise ValueError(f"MP4 rendering failed: {result.stderr[-600:]}")
+
 st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""
 <style>
@@ -84,7 +152,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-for name, default in (("source", None), ("script", ""), ("effects", EffectsState()), ("preview_ready", False)):
+for name, default in (("source", None), ("script", ""), ("effects", EffectsState()), ("preview_ready", False), ("final_video", None)):
     if name not in st.session_state:
         st.session_state[name] = default
 
@@ -142,13 +210,30 @@ if st.session_state.script:
     with script_col:
         st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">Recap script desk</div><div class="ready">● editable</div></div>', unsafe_allow_html=True)
         st.session_state.script = st.text_area("Edit narration before processing", st.session_state.script, height=240)
-        if st.button("Start processing", type="primary", use_container_width=True): st.session_state.preview_ready = True; st.success("Processing complete in demo mode. Review the final preview before export.")
+        if st.button("Start processing", type="primary", use_container_width=True):
+            with st.spinner("Downloading, creating subtitles, generating voiceover, and rendering MP4…"):
+                try:
+                    with tempfile.TemporaryDirectory() as workdir:
+                        source_path = download_authorized_source(st.session_state.source.url, workdir)
+                        srt_path = str(Path(workdir) / "captions.srt")
+                        voice_path = str(Path(workdir) / "voice.mp3")
+                        output_path = str(Path(workdir) / "aungmin-recap.mp4")
+                        make_srt(st.session_state.script, srt_path)
+                        create_voiceover(st.session_state.script, voice_path, language)
+                        render_mp4(source_path, srt_path, voice_path, output_path, st.session_state.effects, RATIOS[platform])
+                        st.session_state.final_video = Path(output_path).read_bytes()
+                    st.session_state.preview_ready = True
+                    st.success("MP4 rendering complete. Review the final preview before download.")
+                except (ValueError, ImportError) as exc:
+                    st.session_state.preview_ready = False
+                    st.error(str(exc))
         st.markdown('</div>', unsafe_allow_html=True)
     with final_col:
         st.markdown('<div class="panel"><div class="panel-head"><div class="panel-title">Final preview gate</div><div class="ready">● review before export</div></div>', unsafe_allow_html=True)
-        if st.session_state.preview_ready:
-            st.markdown('<div class="previewbox"><div><div class="play">▶</div><strong>Final recap preview ready</strong><br><span class="small">Rendered video adapter output will appear here.</span></div></div>', unsafe_allow_html=True); st.caption("Preview gate passed · export actions are now available"); export_format = st.selectbox("Export format", OUTPUT_FORMATS)
-            if st.button(f"Export {export_format}", use_container_width=True): st.download_button("Download export manifest", export_metadata(st.session_state.source, export_format, st.session_state.effects), file_name="aungmin-export.json", mime="application/json")
+        if st.session_state.preview_ready and st.session_state.get("final_video"):
+            st.video(st.session_state.final_video); st.caption("Preview gate passed · export actions are now available"); st.download_button("Download final MP4", st.session_state.final_video, file_name="aungmin-movie-recap.mp4", mime="video/mp4")
+        elif st.session_state.preview_ready:
+            st.warning("The renderer did not return a video file. Check the message above and try again.")
         else: st.markdown('<div class="previewbox"><div><div class="play">◌</div><strong>Preview locked</strong><br><span class="small">Complete processing to review before export.</span></div></div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('<div class="small" style="margin-top:2.5rem">Use only media you own or have permission to process. Platform access and download behavior depends on provider rules and your configured source adapter.</div>', unsafe_allow_html=True)
