@@ -8,6 +8,20 @@ MAX_UPLOAD_MB = 200
 PLATFORMS = ("YouTube", "TikTok", "Bilibili", "RedNote", "Facebook", "Generic")
 RATIOS = {"YouTube": "16:9", "TikTok": "9:16", "Bilibili": "16:9", "RedNote": "9:16", "Facebook": "1:1", "Generic": "16:9"}
 VOICE_NAMES = ("my-MM-NilarNeural", "my-MM-ThihaNeural", "en-US-AriaNeural")
+# These are real Unicode font families installed by packages.txt. Avoid Zawgyi,
+# which produces rounded/missing glyphs when the text is Burmese Unicode.
+FONT_PRESETS = (
+    "Noto Sans Myanmar",
+    "Noto Sans Myanmar SemiBold",
+    "Noto Sans Myanmar Medium",
+    "Noto Sans Myanmar Cond",
+    "Noto Sans Myanmar SemCond",
+    "Noto Sans Myanmar ExtCond",
+    "Noto Sans Myanmar Light",
+    "Noto Sans Myanmar Thin",
+    "Noto Serif Myanmar",
+    "Padauk",
+)
 SUPPORTED_DOMAINS = {
     "YouTube": ("youtube.com", "youtu.be"),
     "TikTok": ("tiktok.com",),
@@ -29,15 +43,17 @@ class EditorState:
     speed: float = 1.0
     flip: bool = False
     blur_strength: int = 0
-    blur_x: int = 8
-    blur_y: int = 12
-    blur_w: int = 34
-    blur_h: int = 22
+    blur_x: int = 5
+    blur_y: int = 72
+    blur_w: int = 90
+    blur_h: int = 18
     subtitle_position: str = "Bottom"
     subtitle_mode: str = "Burmese only"
-    subtitle_size: int = 34
+    subtitle_size: int = 52
+    subtitle_font: str = "Noto Sans Myanmar SemiBold"
     subtitle_offset: float = 0.0
     logo_position: str = "Top Right"
+    logo_motion: str = "Slow drift"
     music_name: str = ""
 
 

@@ -6,7 +6,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from streamlit_app import (
-    APP_NAME, EditorState, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
+    APP_NAME, EditorState, FONT_PRESETS, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
     create_voiceover, download_authorized_source, embed_preview_html,
     generate_recap_bundle, generate_recap_from_transcript, inspect_source, make_srt, preview_html,
     probe_duration, render_mp4, render_bundle_to_mp4, save_uploaded_file, duration_notice,
@@ -138,6 +138,16 @@ with right:
     with tabs[1]:
         style = st.selectbox("Recap narration style / ဇာတ်ကြောင်းပြောဟန်", ["ရုပ်ရှင်ဆန်သော ဇာတ်ကြောင်းပြောဟန်", "စိတ်လှုပ်ရှားဖွယ် ဇာတ်ကြောင်းပြောဟန်", "တည်ငြိမ်ပြီး ရှင်းလင်းသောဟန်", "လျှို့ဝှက်ဆန်းကြယ်သောဟန်", "ဝမ်းနည်းနက်ရှိုင်းသောဟန်"], index=0, key="recap_style")
         detail = "Essential"
+        selected_font = st.selectbox("Subtitle font / မြန်မာစာတန်းဖောင့် (၁၀ မျိုး)", FONT_PRESETS, index=1, key="subtitle_font")
+        editor.subtitle_font = selected_font
+        logo_upload = st.file_uploader("Logo upload / လိုဂိုထည့်ရန် (optional)", type=["png", "jpg", "jpeg"], key="logo_upload")
+        if logo_upload:
+            st.session_state.logo_path = save_uploaded_file(logo_upload, "aungmin-logo")
+        if "logo_path" not in st.session_state:
+            st.session_state.logo_path = None
+        editor.logo_position = st.selectbox("Logo position / လိုဂိုနေရာ", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"], index=0, key="logo_position")
+        editor.logo_motion = st.selectbox("Logo motion / လိုဂိုလှုပ်ရှားပုံ", ["Static", "Slow drift"], index=1, key="logo_motion")
+        st.caption("Unicode font များကိုသာ အသုံးပြုထားသောကြောင့် မြန်မာစာလုံးများ အဝိုင်း/လေးထောင့်ဖြစ်ခြင်းကို လျှော့ချပေးပါသည်။")
         st.markdown('<div class="section-note">Quick Recap သည် video file ရှိလျှင် visuals/audio ကို အသုံးပြုမည်။ YouTube download မရလျှင် public transcript ကို အသုံးပြုပြီး မြန်မာဇာတ်ကြောင်း၊ မြန်မာအသံနှင့် မြန်မာစာတန်းထိုးအတွက် ပြင်ဆင်မည်။</div>', unsafe_allow_html=True)
         if st.session_state.transcript:
             st.info("YouTube public transcript ready — video download မလိုဘဲ recap script ထုတ်နိုင်ပါပြီ။ Final MP4 အတွက်တော့ authorized video file upload လိုပါမယ်။")
@@ -159,9 +169,9 @@ with right:
                     st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip, update_progress)
                     update_progress(42, "မြန်မာ recap script ပြီးပါပြီ — voice/subtitle ပြင်ဆင်နေသည်", started)
 
-                    selected_voice = st.session_state.get("voice_name", "my-MM-NilarNeural")
+                    selected_voice = st.session_state.get("voice_name", "my-MM-ThihaNeural")
                     selected_platform = st.session_state.get("output_platform", "YouTube")
-                    final_bytes = render_bundle_to_mp4(st.session_state.media_path, st.session_state.bundle, selected_voice, editor, selected_platform, update_progress)
+                    final_bytes = render_bundle_to_mp4(st.session_state.media_path, st.session_state.bundle, selected_voice, editor, selected_platform, update_progress, st.session_state.get("logo_path"))
                     if not final_bytes:
                         raise ValueError("Final MP4 data မရပါ။")
                     st.session_state.final_video = final_bytes
@@ -180,17 +190,25 @@ with right:
             st.caption("ဒီစာမူကို ပြင်ပြီးနောက် Final tab က render ခလုတ်ကိုသုံးနိုင်ပါတယ်။")
     with tabs[2]:
         voice_labels = {"my-MM-NilarNeural": "အမျိုးသမီးအသံ — ကြည်လင်ပြီး တည်ငြိမ်သောဟန်", "my-MM-ThihaNeural": "အမျိုးသားအသံ — နက်ရှိုင်းပြီး ရုပ်ရှင်ဆန်သောဟန်", "en-US-AriaNeural": "အင်္ဂလိပ်အသံ — အရေးပေါ်အစားထိုးအသံ"}
-        voice_name = st.selectbox("Voice profile / မြန်မာအသံပုံစံ", list(VOICE_NAMES), index=0, format_func=lambda name: voice_labels.get(name, name), key="voice_name")
+        voice_name = st.selectbox("Voice profile / မြန်မာအသံပုံစံ", list(VOICE_NAMES), index=1, format_func=lambda name: voice_labels.get(name, name), key="voice_name")
         audio_speed = 1.0
         st.markdown('<div class="section-note">ရွေးထားသော မြန်မာအသံပုံစံဖြင့် narration ထုတ်မည်။ အသံနှင့် မြန်မာစာတန်းထိုးကို တစ်ကြိမ်တည်း render လုပ်မည်။</div>', unsafe_allow_html=True)
     with tabs[3]:
         st.markdown("**အလိုအလျောက်ပြင်ဆင်မှု** — မြန်မာ recap အတွက် ရိုးရှင်းသော output")
         editor.speed = 1.0
         editor.flip = False
-        editor.blur_strength = 28 if st.checkbox("Blur ထည့်မယ်", value=editor.blur_strength > 0, key="blur_enabled") else 0
+        blur_enabled = st.checkbox("Chinese စာတန်းနေရာကို Blur ထည့်မယ်", value=editor.blur_strength > 0, key="blur_enabled")
+        editor.blur_strength = st.slider("Blur strength / အုပ်အား", 0, 60, 28, 2, disabled=not blur_enabled) if blur_enabled else 0
+        if blur_enabled:
+            st.caption("Auto default က အောက်ခြေစာတန်းဧရိယာကို အုပ်ပါသည်။ မတူသောနေရာဖြစ်လျှင် x/y/width/height ကို manual ပြင်ပါ။")
+            editor.blur_x = st.slider("Blur X %", 0, 90, editor.blur_x, 1)
+            editor.blur_y = st.slider("Blur Y %", 0, 90, editor.blur_y, 1)
+            editor.blur_w = st.slider("Blur width %", 5, 100, editor.blur_w, 1)
+            editor.blur_h = st.slider("Blur height %", 5, 60, editor.blur_h, 1)
         editor.subtitle_mode = "Burmese only"
-        editor.subtitle_position = "Bottom"
-        editor.subtitle_size = 34
+        editor.subtitle_position = st.selectbox("Subtitle position / စာတန်းနေရာ", ["Bottom", "Center", "Top"], index=0, key="subtitle_position")
+        editor.subtitle_size = st.slider("Subtitle size / စာလုံးအရွယ်", 24, 84, 52, 2, key="subtitle_size")
+        editor.subtitle_font = st.session_state.get("subtitle_font", "Noto Sans Myanmar SemiBold")
         editor.subtitle_offset = 0.0
         output_platform = st.selectbox("Output format", PLATFORMS, format_func=lambda item: f"{item} · {RATIOS[item]}", key="output_platform")
         st.info("Final output: 1920×1080 · 30 FPS · မူရင်း video ကြာချိန်အတိုင်း။ Source က 720p/480p ဖြစ်လျှင် 1080p သို့ upscale လုပ်မည်၊ မူရင်း detail အသစ်ဖန်တီးမည်မဟုတ်ပါ။")
@@ -210,9 +228,11 @@ with right:
                             voice_path = str(Path(workdir) / "voice.mp3")
                             output_path = str(Path(workdir) / "aungmin-recap.mp4")
                             duration = probe_duration(st.session_state.media_path)
-                            make_srt(st.session_state.bundle, duration, srt_path, editor.subtitle_offset, editor.subtitle_mode)
                             create_voiceover(st.session_state.bundle["recap_bn"], voice_path, voice_name)
-                            render_mp4(st.session_state.media_path, srt_path, voice_path, output_path, editor, RATIOS[output_platform], music_path)
+                            voice_duration = probe_duration(voice_path)
+                            subtitle_duration = min(duration, voice_duration) if voice_duration > 0 else duration
+                            make_srt(st.session_state.bundle, subtitle_duration, srt_path, editor.subtitle_offset, editor.subtitle_mode)
+                            render_mp4(st.session_state.media_path, srt_path, voice_path, output_path, editor, RATIOS[output_platform], music_path, logo_path=st.session_state.get("logo_path"))
                             output_file = Path(output_path)
                             if not output_file.is_file() or output_file.stat().st_size < 1024:
                                 raise ValueError("Final MP4 was not created. Nothing is available to download.")

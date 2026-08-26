@@ -278,6 +278,19 @@
 - [x] Keep one live google-genai Client through video upload, file polling, and analysis so Streamlit cannot close the client mid-request
 - [x] Add a regression test that fails if upload/analysis uses a temporary closed client
 - [x] Re-run syntax, unit, SDK import, Streamlit startup, and real MP4 regression tests
-- [ ] Push the verified client lifecycle fix to GitHub main
+- [x] Push the verified client lifecycle fix to GitHub main
 
 ရက်စွဲ: 2026-08-26 — live app reported `Gemini video upload မအောင်မြင်ပါ: Cannot send a request, as the client has been closed.`
+
+# Uploaded reference video matching — pending
+
+- [x] Analyze both uploaded reference videos for duration, frame size, FPS, subtitle placement, blur behavior, logo motion, narration pacing, and speech-cut timing
+- [x] Add ten readable Burmese subtitle font choices and selectable font configuration before recap generation
+- [x] Add automatic/manual blur for the original Chinese subtitle region and apply it during MP4 rendering
+- [x] Match reference-style Burmese subtitle placement, outline, size, and timing without rounded/missing glyphs
+- [x] Match reference-style Burmese narration pacing, pauses, and sentence-break timing as closely as the selected voice engine allows
+- [x] Add reference-style logo overlay motion/placement controls and preserve existing AungMin design
+- [x] Run reference comparison, font rendering, subtitle, audio, and final MP4 regression tests
+- [ ] Push the verified reference-matching changes to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user supplied two reference videos and requested matching output behavior.

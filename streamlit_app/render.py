@@ -6,58 +6,122 @@ from urllib.parse import parse_qs, urlparse
 
 from .config import EditorState, SourceInfo
 
-def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_path: str, effects: EditorState, ratio: str, music_path: str | None = None, target_width: int = 1920, target_height: int = 1080, target_fps: int = 30) -> None:
+
+def _output_size(ratio: str) -> tuple[int, int]:
+    if ratio == "9:16":
+        return 1080, 1920
+    if ratio == "1:1":
+        return 1080, 1080
+    if ratio == "3:4":
+        return 1080, 1440
+    return 1920, 1080
+
+
+def _subtitle_filter(srt_path: str, effects: EditorState) -> str:
+    safe_path = srt_path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+    font = (getattr(effects, "subtitle_font", "Noto Sans Myanmar SemiBold") or "Noto Sans Myanmar SemiBold").replace("'", "")
+    size = max(24, min(96, int(getattr(effects, "subtitle_size", 52))))
+    position = getattr(effects, "subtitle_position", "Bottom")
+    alignment = {"Top": 8, "Center": 5, "Bottom": 2}.get(position, 2)
+    margin = {"Top": 90, "Center": 0, "Bottom": 110}.get(position, 110)
+    # ASS/SSA colours are AABBGGRR: this is opaque yellow with black outline.
+    style = f"FontName={font},FontSize={size},PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment={alignment},MarginV={margin}"
+    return f"subtitles='{safe_path}':force_style='{style}'"
+
+
+def _video_graph(source_path: str, srt_path: str, effects: EditorState, ratio: str, target_fps: int) -> str:
+    width, height = _output_size(ratio)
+    if ratio in {"9:16", "3:4"}:
+        # Fill portrait canvas like the reference edit, then crop the sides;
+        # do not letterbox a landscape source into a narrow portrait frame.
+        pre = [f"scale={width}:{height}:force_original_aspect_ratio=increase", f"crop={width}:{height}", f"fps={target_fps}"]
+    else:
+        pre = [f"scale={width}:{height}:force_original_aspect_ratio=decrease", f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black", f"fps={target_fps}"]
+    if effects.flip:
+        pre.append("hflip")
+    # Aspect-ratio crop is already included above for portrait outputs.
+    if effects.speed != 1.0:
+        pre.append(f"setpts=PTS/{max(0.25, min(4.0, effects.speed))}")
+    subtitle = _subtitle_filter(srt_path, effects)
+    if effects.blur_strength > 0:
+        x = max(0.0, min(0.95, effects.blur_x / 100))
+        y = max(0.0, min(0.95, effects.blur_y / 100))
+        w = max(0.03, min(1.0 - x, effects.blur_w / 100))
+        h = max(0.03, min(1.0 - y, effects.blur_h / 100))
+        radius = max(2, min(30, effects.blur_strength // 2))
+        return (
+            f"[0:v]{','.join(pre)}[base];"
+            f"[base]split=2[clean][blur];"
+            f"[blur]crop=w=iw*{w:.4f}:h=ih*{h:.4f}:x=iw*{x:.4f}:y=ih*{y:.4f},boxblur={radius}:2[blurred];"
+            f"[clean][blurred]overlay=x=main_w*{x:.4f}:y=main_h*{y:.4f}:shortest=1[blurred_base];"
+            f"[blurred_base]{subtitle}[vbase]"
+        )
+    return f"[0:v]{','.join(pre + [subtitle])}[vbase]"
+
+
+def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_path: str, effects: EditorState, ratio: str, music_path: str | None = None, target_width: int = 1920, target_height: int = 1080, target_fps: int = 30, logo_path: str | None = None) -> None:
     import imageio_ffmpeg
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-    subtitle_path = srt_path.replace("\\", "/").replace(":", "\\:")
     source_duration = 0.0
     try:
         from .media import probe_duration
         source_duration = probe_duration(source_path)
     except Exception:
-        source_duration = 0.0
-    video_filters = [f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease", f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black", f"fps={target_fps}", f"subtitles='{subtitle_path}'"]
-    if effects.blur_strength > 0:
-        video_filters.append(f"boxblur={max(1, effects.blur_strength // 12)}:1")
-    if effects.flip:
-        video_filters.append("hflip")
-    if ratio == "9:16":
-        video_filters.append("crop=ih*9/16:ih")
-    elif ratio == "1:1":
-        video_filters.append("crop=ih:ih")
-    if effects.speed != 1.0:
-        video_filters.append(f"setpts=PTS/{effects.speed}")
+        pass
+
+    graph_parts = [_video_graph(source_path, srt_path, effects, ratio, target_fps)]
     command = [ffmpeg, "-y", "-i", source_path]
     if voice_path:
         command += ["-i", voice_path]
     if music_path:
         command += ["-i", music_path]
-    command += ["-vf", ",".join(video_filters), "-map", "0:v:0"]
+    if logo_path:
+        command += ["-loop", "1", "-i", logo_path]
+    if logo_path:
+        position = getattr(effects, "logo_position", "Top Right")
+        motion = getattr(effects, "logo_motion", "Slow drift")
+        if position == "Top Left":
+            x, y = "28", "28"
+        elif position == "Bottom Left":
+            x, y = "28", "main_h-overlay_h-28"
+        elif position == "Bottom Right":
+            x, y = "main_w-overlay_w-28", "main_h-overlay_h-28"
+        else:
+            x, y = "main_w-overlay_w-28", "28"
+        if motion == "Slow drift":
+            x = f"{x}+12*sin(t/5)" if x != "28" else "28+12*sin(t/5)"
+            y = f"{y}+8*sin(t/6)" if y != "28" else "28+8*sin(t/6)"
+        logo_index = 1 + int(bool(voice_path)) + int(bool(music_path))
+        graph_parts.append(f"[{logo_index}:v]format=rgba,scale=iw*0.18:-1,colorchannelmixer=aa=0.82[logo];[vbase][logo]overlay=x='{x}':y='{y}':shortest=1[vout]")
+    else:
+        graph_parts[0] = graph_parts[0].replace("[vbase]", "[vout]")
     if voice_path and music_path:
-        command += ["-filter_complex", "[1:a]volume=1.0[voice];[2:a]volume=0.18[music];[voice][music]amix=inputs=2:duration=shortest[aout]", "-map", "[aout]"]
+        graph_parts.append("[1:a]volume=1.0[voice];[2:a]volume=0.18[music];[voice][music]amix=inputs=2:duration=longest[aout]")
+    command += ["-filter_complex", ";".join(graph_parts), "-map", "[vout]"]
+    if voice_path and music_path:
+        command += ["-map", "[aout]"]
     elif voice_path:
         command += ["-map", "1:a:0"]
     elif music_path:
         command += ["-map", "2:a:0"]
     else:
         command += ["-map", "0:a:0?"]
-    command += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-c:a", "aac"]
+    command += ["-c:v", "libx264", "-preset", "ultrafast", "-tune", "fastdecode", "-threads", "0", "-crf", "27", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart"]
     if source_duration > 0:
         command += ["-t", f"{source_duration:.3f}"]
-    command += ["-movflags", "+faststart", output_path]
+    command += [output_path]
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=900)
     except subprocess.TimeoutExpired as exc:
         raise ValueError("Rendering timed out. Try a shorter video.") from exc
     if result.returncode != 0:
-        raise ValueError(f"MP4 rendering failed: {result.stderr[-700:]}")
+        raise ValueError(f"MP4 rendering failed: {result.stderr[-900:]}")
     output = Path(output_path)
     if not output.is_file() or output.stat().st_size < 1024:
         raise ValueError("FFmpeg finished without creating a valid MP4 output.")
 
 
 def embed_preview_html(source: SourceInfo) -> str | None:
-    """Return a browser preview for providers that expose an embed URL."""
     if source.platform != "YouTube":
         return None
     parsed = urlparse(source.url)

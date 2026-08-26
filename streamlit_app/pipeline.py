@@ -21,6 +21,7 @@ def render_bundle_to_mp4(
     editor: EditorState,
     output_platform: str,
     progress: ProgressCallback | None = None,
+    logo_path: str | None = None,
 ) -> bytes:
     """Create and verify the final MP4 from one completed recap bundle.
 
@@ -45,20 +46,24 @@ def render_bundle_to_mp4(
 
         if progress:
             progress(10, "Video ကို စစ်နေသည်", started)
-        make_srt(bundle, duration, str(srt_path), editor.subtitle_offset, editor.subtitle_mode)
-        if not srt_path.is_file() or srt_path.stat().st_size == 0:
-            raise ValueError("မြန်မာစာတန်းထိုး SRT ဖိုင် မဖန်တီးနိုင်ပါ။")
-
         if progress:
             progress(25, "မြန်မာအသံ ဖန်တီးနေသည်", started)
         create_voiceover(recap, str(voice_path), voice_name)
         if not voice_path.is_file() or voice_path.stat().st_size < 1024:
             raise ValueError("မြန်မာအသံဖိုင် မဖန်တီးနိုင်ပါ။")
 
+        # Generate captions against the actual TTS duration. Equal chunks over
+        # source duration made subtitles drift when TTS finished early/late.
+        voice_duration = probe_duration(str(voice_path))
+        subtitle_duration = min(duration, voice_duration) if voice_duration > 0 else duration
+        make_srt(bundle, subtitle_duration, str(srt_path), editor.subtitle_offset, editor.subtitle_mode)
+        if not srt_path.is_file() or srt_path.stat().st_size == 0:
+            raise ValueError("မြန်မာစာတန်းထိုး SRT ဖိုင် မဖန်တီးနိုင်ပါ။")
+
         if progress:
             progress(55, "1080p / 30 FPS MP4 ပေါင်းနေသည်", started)
         ratio = {"YouTube": "16:9", "TikTok": "9:16", "Facebook": "1:1"}.get(output_platform, "16:9")
-        render_mp4(media_path, str(srt_path), str(voice_path), str(output_path), editor, ratio)
+        render_mp4(media_path, str(srt_path), str(voice_path), str(output_path), editor, ratio, logo_path=logo_path)
         if not output_path.is_file() or output_path.stat().st_size < 1024:
             raise ValueError("FFmpeg ပြီးသွားသော်လည်း အမှန်တကယ် MP4 output မရပါ။")
         data = output_path.read_bytes()
