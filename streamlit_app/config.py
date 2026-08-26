@@ -59,6 +59,12 @@ class EditorState:
     flip: bool = False
     blur_enabled: bool = False
     subtitle_enabled: bool = True
+    subtitle_auto_sync: bool = True
+    subtitle_fill: str = "#FFF200"
+    subtitle_outline: str = "#000000"
+    subtitle_background: str = "#000000"
+    subtitle_background_opacity: int = 0
+    subtitle_design: str = "Yellow + black outline"
     blur_strength: int = 0
     blur_x: int = 5
     blur_y: int = 72

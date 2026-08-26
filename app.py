@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 
 from streamlit_app import (
     APP_NAME, EditorState, FONT_FAMILIES, FONT_FILES, FONT_PRESETS, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
-    create_voiceover, download_authorized_source, embed_preview_html,
+    create_voiceover, fit_audio_to_duration, download_authorized_source, embed_preview_html,
     generate_recap_bundle, generate_recap_from_transcript, inspect_source, make_srt, preview_html,
     probe_duration, render_mp4, render_bundle_to_mp4, render_voice_preview, save_uploaded_file, duration_notice,
     validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
@@ -259,30 +259,58 @@ with right:
             editor.blur_w = st.slider("Blur width %", 5, 100, editor.blur_w, 1)
             editor.blur_h = st.slider("Blur height %", 5, 60, editor.blur_h, 1)
         editor.subtitle_mode = "Burmese only"
+        if st.button("Auto Subtitle · အသံနဲ့ 100% ချိန်ညှိ", type="secondary", use_container_width=True):
+            editor.subtitle_auto_sync = True
+            st.session_state.auto_subtitle_ready = True
+            st.success("Auto Subtitle ဖွင့်ပြီးပါပြီ။ Approved voice ကြာချိန်အတိုင်း စာတန်းကို အလိုအလျောက်ခွဲပါမယ်။")
+        st.caption("Auto Subtitle က narration duration အတိုင်း caption timing ချိန်ပြီး 9:16 / 16:9 output canvas အတိုင်း ပြပါမယ်။")
         subtitle_enabled = st.checkbox("Subtitle အဖွင့် / အပိတ်", value=editor.subtitle_enabled, key="subtitle_enabled")
         editor.subtitle_enabled = subtitle_enabled
         editor.subtitle_position = st.selectbox("Subtitle position / စာတန်းနေရာ", ["Bottom", "Center", "Top"], index=0, key="subtitle_position")
         editor.subtitle_size = st.slider("Subtitle size / စာလုံးအရွယ်", 24, 64, 42, 2, key="subtitle_size")
+        editor.subtitle_design = st.selectbox("Subtitle design / စာတန်းဒီဇိုင်း", ["Yellow + black outline", "White + black outline", "Cyan + black outline", "White + dark box", "Custom color"], key="subtitle_design")
+        design_map = {
+            "Yellow + black outline": ("#FFF200", "#000000", "#000000", 0),
+            "White + black outline": ("#FFFFFF", "#000000", "#000000", 0),
+            "Cyan + black outline": ("#63F5FF", "#000000", "#000000", 0),
+            "White + dark box": ("#FFFFFF", "#000000", "#000000", 72),
+        }
+        if editor.subtitle_design == "Custom color":
+            editor.subtitle_fill = st.color_picker("Text color / စာသားအရောင်", editor.subtitle_fill, key="subtitle_fill")
+            editor.subtitle_outline = st.color_picker("Outline color / အနားသတ်အရောင်", editor.subtitle_outline, key="subtitle_outline")
+            editor.subtitle_background_opacity = st.slider("Background opacity", 0, 90, editor.subtitle_background_opacity, 5, key="subtitle_background_opacity")
+        else:
+            editor.subtitle_fill, editor.subtitle_outline, editor.subtitle_background, editor.subtitle_background_opacity = design_map[editor.subtitle_design]
         editor.subtitle_font = st.session_state.get("subtitle_font", "Pyidaungsu Book Regular")
         editor.subtitle_offset = 0.0
+        output_platform = st.selectbox("Output format", PLATFORMS, format_func=lambda item: f"{item} · {RATIOS[item]}", key="output_platform")
+        output_dimensions = {"16:9": "1920×1080", "9:16": "1080×1920", "1:1": "1080×1080", "3:4": "1080×1440"}.get(RATIOS[output_platform], "1920×1080")
         if st.session_state.media_path:
             st.markdown("**Blur / subtitle / logo / watermark ကို video frame ပေါ်မှာ တိုက်ရိုက်ရွှေ့ပြီး ချိန်ပါ**")
             try:
                 from streamlit_drawable_canvas import st_canvas
                 source_duration = max(0.1, float(probe_duration(st.session_state.media_path)))
                 preview_time = st.slider("Preview scene / လက်ရှိကြည့်မည့်အချိန်", 0.0, source_duration, min(float(st.session_state.get("preview_time", 0.0)), source_duration), 0.1, key="preview_time")
-                frame = extract_preview_frame(st.session_state.media_path, width=720, height=405, timestamp=preview_time)
+                ratio = RATIOS[output_platform]
+                canvas_width, canvas_height = ((405, 720) if ratio == "9:16" else (720, 405) if ratio == "16:9" else (540, 540))
+                frame = extract_preview_frame(st.session_state.media_path, width=canvas_width, height=canvas_height, timestamp=preview_time)
                 preview_text = st.session_state.get("manual_subtitle", "").strip() or (st.session_state.bundle or {}).get("subtitle_bn", "")
                 logo_path = st.session_state.get("logo_path")
-                canvas_key = f"finish_overlay_canvas_{round(preview_time, 1)}_{editor.subtitle_font}_{editor.subtitle_size}_{editor.subtitle_enabled}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_enabled}_{editor.blur_strength}"
-                canvas_result = st_canvas(
+                canvas_key = f"finish_overlay_canvas_{ratio}_{canvas_width}x{canvas_height}_{round(preview_time, 1)}_{editor.subtitle_font}_{editor.subtitle_size}_{editor.subtitle_fill}_{editor.subtitle_design}_{editor.subtitle_enabled}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_enabled}_{editor.blur_strength}"
+                canvas_kwargs = dict(
                     fill_color="rgba(0, 0, 0, 0.58)", stroke_width=3, stroke_color="#70e8d8",
-                    background_image=frame, update_streamlit=True, height=405, width=720,
-                    drawing_mode="transform",                     initial_drawing=canvas_initial_drawing(editor, 720, 405, preview_text if editor.subtitle_enabled else "", FONT_FAMILIES.get(editor.subtitle_font, "Pyidaungsu Book"), logo_path),
+                    background_image=frame, update_streamlit=True, height=canvas_height, width=canvas_width,
+                    drawing_mode="transform", initial_drawing=canvas_initial_drawing(editor, canvas_width, canvas_height, preview_text if editor.subtitle_enabled else "", FONT_FAMILIES.get(editor.subtitle_font, "Pyidaungsu Book"), logo_path),
                     display_toolbar=True, key=canvas_key,
                 )
-                editor, coords = sync_blur_from_canvas(editor, canvas_result.json_data, 720, 405)
-                editor = sync_overlays_from_canvas(editor, canvas_result.json_data, 720, 405)
+                if ratio == "9:16":
+                    preview_columns = st.columns([1, 1, 1])
+                    with preview_columns[1]:
+                        canvas_result = st_canvas(**canvas_kwargs)
+                else:
+                    canvas_result = st_canvas(**canvas_kwargs)
+                editor, coords = sync_blur_from_canvas(editor, canvas_result.json_data, canvas_width, canvas_height)
+                editor = sync_overlays_from_canvas(editor, canvas_result.json_data, canvas_width, canvas_height)
                 if coords:
                     st.caption(f"လက်ရှိ Blur: X {coords[0]}% · Y {coords[1]}% · Width {coords[2]}% · Height {coords[3]}% — box ကို video ပေါ်မှာ ဖိဆွဲရွှေ့ပါ။")
                 st.caption(f"Subtitle: X {editor.subtitle_x}% · Y {editor.subtitle_y}% · Size {editor.subtitle_size}px · Logo: X {editor.logo_x}% · Y {editor.logo_y}% · Watermark: X {editor.watermark_x}% · Y {editor.watermark_y}%")
@@ -290,8 +318,6 @@ with right:
                 st.warning("Direct canvas editor package မတက်သေးပါ။")
             except Exception as exc:
                 st.warning(f"Live preview editor မတက်နိုင်သေးပါ: {exc}")
-        output_platform = st.selectbox("Output format", PLATFORMS, format_func=lambda item: f"{item} · {RATIOS[item]}", key="output_platform")
-        output_dimensions = {"16:9": "1920×1080", "9:16": "1080×1920", "1:1": "1080×1080", "3:4": "1080×1440"}.get(RATIOS[output_platform], "1920×1080")
         st.info(f"Final output: {output_dimensions} · 30 FPS · မူရင်း video ကြာချိန်အတိုင်း။ Source က resolution နိမ့်လျှင် upscale လုပ်မည်၊ မူရင်း detail အသစ်ဖန်တီးမည်မဟုတ်ပါ။")
         music_path = None
         st.markdown('<div class="section-note">Blur ကို privacy/editing အတွက်သာ အသုံးပြုမည်။ Final video တွင် မြန်မာ voice narration နှင့် မြန်မာ subtitle တစ်မျိုးတည်း ပါမည်။</div>', unsafe_allow_html=True)
@@ -312,12 +338,14 @@ with right:
                             output_path = str(Path(workdir) / "aungmin-recap.mp4")
                             duration = probe_duration(st.session_state.media_path)
                             approved_voice_path = st.session_state.voice_preview.get("voice_path") if st.session_state.voice_preview else None
+                            raw_voice_path = str(Path(workdir) / "voice-raw.mp3")
                             if approved_voice_path and Path(approved_voice_path).is_file():
-                                Path(voice_path).write_bytes(Path(approved_voice_path).read_bytes())
+                                Path(raw_voice_path).write_bytes(Path(approved_voice_path).read_bytes())
                             else:
-                                create_voiceover(st.session_state.bundle["recap_bn"], voice_path, voice_name)
+                                create_voiceover(st.session_state.bundle["recap_bn"], raw_voice_path, voice_name)
+                            fit_audio_to_duration(raw_voice_path, voice_path, duration)
                             voice_duration = probe_duration(voice_path)
-                            subtitle_duration = min(duration, voice_duration) if voice_duration > 0 else duration
+                            subtitle_duration = duration if editor.subtitle_auto_sync else min(duration, voice_duration) if voice_duration > 0 else duration
                             render_bundle = dict(st.session_state.bundle)
                             manual_text = st.session_state.get("manual_subtitle", "").strip()
                             if manual_text:

@@ -415,3 +415,15 @@
 - [x] Push the verified correction to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user requested source-video frame preview, immediate overlay feedback, optional blur/subtitle toggles, and readable Burmese output.
+
+# Auto subtitle synchronization and format-aware editor — pending
+
+- [x] Add one-click Auto Subtitle generation from approved narration and align subtitle segments to the actual narration/audio duration
+- [x] Make auto subtitle timing preserve the selected source/output duration and avoid long one-line Burmese text
+- [x] Make the floating editor use a centered, aspect-ratio-aware 9:16 or 16:9 canvas instead of a left-stuck padded view
+- [x] Add subtitle color, outline/background, and design presets with live preview and final-render parity
+- [x] Keep manual subtitle drag/resize controls while constraining text to the output canvas
+- [x] Run real SRT, narration-duration, preview geometry, color, and MP4 regression tests
+- [x] Push the verified subtitle correction to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user requested one-click narration-synchronized subtitles, compact wrapping, exact 9:16/16:9 layout, manual positioning/size controls, and selectable text colors/designs.

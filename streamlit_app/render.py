@@ -19,6 +19,14 @@ def _output_size(ratio: str) -> tuple[int, int]:
     return 1920, 1080
 
 
+def _ass_color(value: str, alpha: int = 0) -> str:
+    raw = str(value or "#FFFFFF").lstrip("#")
+    if len(raw) != 6:
+        raw = "FFFFFF"
+    rr, gg, bb = raw[0:2], raw[2:4], raw[4:6]
+    return f"&H{max(0, min(255, int(alpha))):02X}{bb}{gg}{rr}"
+
+
 def _subtitle_filter(srt_path: str, effects: EditorState) -> str:
     safe_path = srt_path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
     selected = getattr(effects, "subtitle_font", "Pyidaungsu Book Regular") or "Pyidaungsu Book Regular"
@@ -36,8 +44,12 @@ def _subtitle_filter(srt_path: str, effects: EditorState) -> str:
                  ("left", "center"): 4, ("center", "center"): 5, ("right", "center"): 6,
                  ("left", "bottom"): 1, ("center", "bottom"): 2, ("right", "bottom"): 3}[(horizontal, vertical)]
     margin = max(20, int((100 - min(100, custom_y + int(getattr(effects, "subtitle_h", 16)))) * 8))
-    # ASS/SSA colours are AABBGGRR: this is opaque yellow with black outline.
-    style = f"FontName={font},FontSize={size},PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment={alignment},MarginV={margin}"
+    fill = _ass_color(getattr(effects, "subtitle_fill", "#FFF200"), 0)
+    outline = _ass_color(getattr(effects, "subtitle_outline", "#000000"), 0)
+    background_alpha = 255 - max(0, min(255, int(getattr(effects, "subtitle_background_opacity", 0) * 2.55)))
+    background = _ass_color(getattr(effects, "subtitle_background", "#000000"), background_alpha)
+    border_style = 3 if getattr(effects, "subtitle_background_opacity", 0) > 0 else 1
+    style = f"FontName={font},FontSize={size},PrimaryColour={fill},OutlineColour={outline},BackColour={background},BorderStyle={border_style},Outline=3,Shadow=1,Alignment={alignment},MarginV={margin}"
     return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':force_style='{style}'"
 
 

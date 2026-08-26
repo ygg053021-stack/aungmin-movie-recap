@@ -27,18 +27,21 @@ def extract_preview_frame(media_path: str, width: int = 720, height: int = 405, 
 
 
 def _wrap_preview_text(draw, text: str, font, max_width: int) -> str:
-    words = " ".join(str(text or "").split()).split(" ")
+    compact = " ".join(str(text or "").replace("\n", " ").split())
+    if not compact:
+        return ""
+    chunks = compact.split(" ") if " " in compact else list(compact)
     lines: list[str] = []
     current = ""
-    for word in words:
-        candidate = f"{current} {word}".strip()
+    for chunk in chunks:
+        candidate = f"{current} {chunk}".strip() if " " in compact else current + chunk
         if current and draw.textbbox((0, 0), candidate, font=font)[2] > max_width:
-            lines.append(current)
-            current = word
+            lines.append(current.strip())
+            current = chunk
         else:
             current = candidate
     if current:
-        lines.append(current)
+        lines.append(current.strip())
     return "\n".join(lines[:3])
 
 
@@ -61,6 +64,25 @@ def add_preview_subtitle(frame, subtitle: str, font_path: str | None, size: int,
     return image
 
 
+def _compact_canvas_text(text: str, max_chars: int) -> str:
+    compact = " ".join(str(text or "").replace("\n", " ").split())
+    if len(compact) <= max_chars:
+        return compact
+    chunks = compact.split(" ") if " " in compact else list(compact)
+    lines: list[str] = []
+    current = ""
+    for chunk in chunks:
+        candidate = f"{current} {chunk}".strip() if " " in compact else current + chunk
+        if current and len(candidate) > max_chars:
+            lines.append(current.strip())
+            current = chunk
+        else:
+            current = candidate
+    if current:
+        lines.append(current.strip())
+    return "\n".join(lines[:3])
+
+
 def canvas_initial_drawing(state: EditorState, width: int, height: int, subtitle: str = "", font_family: str = "sans-serif", logo_path: str | None = None) -> dict:
     x, y = state.blur_x * width / 100, state.blur_y * height / 100
     w, h = state.blur_w * width / 100, state.blur_h * height / 100
@@ -72,11 +94,15 @@ def canvas_initial_drawing(state: EditorState, width: int, height: int, subtitle
             "selectable": True, "hasControls": True, "lockRotation": True,
         })
     if getattr(state, "subtitle_enabled", True) and subtitle.strip():
+        font_size = max(16, min(42, int(state.subtitle_size * min(width / 1920, height / 1080) * 1.35)))
+        max_chars = max(10, min(24, int(width / max(font_size * 0.58, 1))))
+        subtitle_text = _compact_canvas_text(subtitle[:180], max_chars)
         objects.append({
-            "type": "i-text", "name": "subtitle", "left": width * state.subtitle_x / 100, "top": height * state.subtitle_y / 100,
-            "text": subtitle[:120], "fontSize": max(18, min(42, int(state.subtitle_size * height / 1080))),
-            "fontFamily": font_family or "sans-serif", "fill": "#fff000", "stroke": "#000000", "strokeWidth": 1,
-            "paintFirst": "stroke", "selectable": True, "evented": True, "hasControls": True,
+            "type": "i-text", "name": "subtitle", "left": width * 0.08, "top": height * state.subtitle_y / 100,
+            "width": width * 0.84, "text": subtitle_text, "fontSize": font_size,
+            "fontFamily": font_family or "sans-serif", "fill": getattr(state, "subtitle_fill", "#FFF200"), "stroke": getattr(state, "subtitle_outline", "#000000"), "strokeWidth": 1,
+            "backgroundColor": getattr(state, "subtitle_background", "#000000") if getattr(state, "subtitle_background_opacity", 0) > 0 else "transparent",
+            "textAlign": "center", "paintFirst": "stroke", "selectable": True, "evented": True, "hasControls": True,
         })
     if getattr(state, "watermark_text", "").strip():
         objects.append({

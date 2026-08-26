@@ -5,22 +5,25 @@ import tempfile
 from pathlib import Path
 
 
-def _wrap_caption(text: str, max_chars: int = 34) -> str:
-    compact = " ".join(str(text or "").split())
+def _wrap_caption(text: str, max_chars: int = 22) -> str:
+    """Keep Burmese captions compact enough for portrait and landscape output."""
+    compact = " ".join(str(text or "").replace("\n", " ").split())
     if len(compact) <= max_chars:
         return compact
-    words = compact.split(" ")
+    # Burmese often has no spaces, so wrap by Unicode characters when a space
+    # based split cannot produce short lines.
+    words = compact.split(" ") if " " in compact else list(compact)
     lines: list[str] = []
     current = ""
     for word in words:
-        candidate = f"{current} {word}".strip()
+        candidate = f"{current} {word}".strip() if " " in compact else current + word
         if current and len(candidate) > max_chars:
-            lines.append(current)
+            lines.append(current.strip())
             current = word
         else:
             current = candidate
     if current:
-        lines.append(current)
+        lines.append(current.strip())
     return "\n".join(lines[:3])
 
 
@@ -33,7 +36,18 @@ def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode
     bn = [line.strip() for line in bundle.get("subtitle_bn", "").splitlines() if line.strip()]
     en = [line.strip() for line in bundle.get("subtitle_en", "").splitlines() if line.strip()]
     recap = [line.strip() for line in bundle.get("recap_bn", "").splitlines() if line.strip()]
+    # Auto mode consumes the approved narration timeline. If the model returned
+    # one long paragraph, split it into compact caption units before distributing
+    # them over the exact fitted voice duration.
     lines = bn or recap or ["AungMin Movie Recap"]
+    normalized: list[str] = []
+    for line in lines:
+        clean = " ".join(str(line).split())
+        if len(clean) <= 42:
+            normalized.append(clean)
+        else:
+            normalized.extend([part.replace("\n", " ").strip() for part in _wrap_caption(clean, 22).splitlines() if part.strip()])
+    lines = normalized or ["AungMin Movie Recap"]
     duration = max(1.0, float(duration or len(lines) * 4))
     raw_segments = bundle.get("segments")
     timed_segments = []
