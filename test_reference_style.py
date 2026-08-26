@@ -39,8 +39,9 @@ class ReferenceStyleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 render_mp4("/tmp/source.mp4", None, None, "/tmp/out.mp4", state, "9:16")
             command_text = " ".join(str(item) for item in captured[-1])
-            self.assertIn("fontfile", command_text)
-            self.assertIn("watermark", command_text)
+            self.assertIn("watermark.png", command_text)
+            self.assertIn("[watermark]", command_text)
+            self.assertIn("-loop", command_text)
         finally:
             render_module.subprocess.run = original
 

@@ -4,6 +4,8 @@ import subprocess
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from PIL import Image, ImageDraw, ImageFont
+
 from .config import EditorState, FONT_FAMILIES, SourceInfo
 
 
@@ -37,6 +39,24 @@ def _subtitle_filter(srt_path: str, effects: EditorState) -> str:
     # ASS/SSA colours are AABBGGRR: this is opaque yellow with black outline.
     style = f"FontName={font},FontSize={size},PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment={alignment},MarginV={margin}"
     return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':force_style='{style}'"
+
+
+def _prepare_watermark_png(text: str, font_path: str, font_size: int, output_path: str) -> str:
+    """Render Burmese watermark text to a transparent PNG so drawtext is not required."""
+    size = max(12, min(96, int(font_size)))
+    try:
+        font = ImageFont.truetype(font_path, size=size)
+    except Exception:
+        font = ImageFont.load_default()
+    probe = Image.new("RGBA", (2400, 300), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(probe)
+    bbox = draw.textbbox((0, 0), text[:80], font=font, stroke_width=2)
+    width = max(80, bbox[2] - bbox[0] + 24)
+    height = max(48, bbox[3] - bbox[1] + 24)
+    canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    ImageDraw.Draw(canvas).text((12 - bbox[0], 12 - bbox[1]), text[:80], font=font, fill=(255, 255, 255, 184), stroke_width=2, stroke_fill=(0, 0, 0, 140))
+    canvas.save(output_path, format="PNG", optimize=True)
+    return output_path
 
 
 def _video_graph(source_path: str, srt_path: str | None, effects: EditorState, ratio: str, target_fps: int) -> str:
@@ -85,17 +105,23 @@ def render_mp4(source_path: str, srt_path: str | None, voice_path: str | None, o
         command += ["-i", voice_path]
     if music_path:
         command += ["-i", music_path]
+    watermark = str(getattr(effects, "watermark_text", "") or "").strip()
+    watermark_index = None
+    if watermark:
+        watermark_font = Path(__file__).resolve().parent.parent / "fonts" / "Pyidaungsu-Book-Regular.ttf"
+        watermark_file = Path(output_path).with_suffix(".watermark.png")
+        _prepare_watermark_png(watermark, str(watermark_font), int(getattr(effects, "watermark_size", 24)), str(watermark_file))
+        watermark_index = 1 + int(bool(voice_path)) + int(bool(music_path))
+        command += ["-loop", "1", "-i", str(watermark_file)]
+    logo_index = None
     if logo_path:
+        logo_index = 1 + int(bool(voice_path)) + int(bool(music_path)) + int(watermark_index is not None)
         command += ["-loop", "1", "-i", logo_path]
     current_video = "[vbase]"
-    watermark = str(getattr(effects, "watermark_text", "") or "").strip()
-    if watermark:
-        safe_watermark = watermark.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace("%", "\\%")[:80]
+    if watermark_index is not None:
         wx = max(0, min(100, int(getattr(effects, "watermark_x", 4))))
         wy = max(0, min(100, int(getattr(effects, "watermark_y", 5))))
-        wsize = max(12, min(72, int(getattr(effects, "watermark_size", 24))))
-        watermark_font = (Path(__file__).resolve().parent.parent / "fonts" / "Pyidaungsu-Book-Regular.ttf").as_posix().replace(":", "\\:").replace("'", "\\'")
-        graph_parts.append(f"[vbase]drawtext=fontfile='{watermark_font}':text='{safe_watermark}':x=w*{wx/100:.4f}:y=h*{wy/100:.4f}:fontsize={wsize}:fontcolor=white@0.72:borderw=2:bordercolor=black@0.55[vwatermarked]")
+        graph_parts.append(f"[{watermark_index}:v]format=rgba,colorchannelmixer=aa=0.82[watermark];[vbase][watermark]overlay=x=main_w*{wx/100:.4f}:y=main_h*{wy/100:.4f}:shortest=1[vwatermarked]")
         current_video = "[vwatermarked]"
     if logo_path:
         position = getattr(effects, "logo_position", "Top Right")
@@ -107,8 +133,8 @@ def render_mp4(source_path: str, srt_path: str | None, voice_path: str | None, o
         if motion == "Slow drift":
             x = f"{x}+12*sin(t/5)" if x != "28" else "28+12*sin(t/5)"
             y = f"{y}+8*sin(t/6)" if y != "28" else "28+8*sin(t/6)"
-        logo_index = 1 + int(bool(voice_path)) + int(bool(music_path))
-        graph_parts.append(f"[{logo_index}:v]format=rgba,scale=main_w*{logo_w/100:.4f}:-1,colorchannelmixer=aa=0.82[logo];{current_video}[logo]overlay=x='{x}':y='{y}':shortest=1[vout]")
+        logo_index = logo_index if logo_index is not None else 1 + int(bool(voice_path)) + int(bool(music_path))
+        graph_parts.append(f"[{logo_index}:v]format=rgba,scale=iw*{logo_w/100:.4f}:-1,colorchannelmixer=aa=0.82[logo];{current_video}[logo]overlay=x='{x}':y='{y}':shortest=1[vout]")
     elif current_video == "[vbase]":
         graph_parts[0] = graph_parts[0].replace("[vbase]", "[vout]")
     else:

@@ -358,3 +358,26 @@
 - [x] Push the verified live preview and font correction to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user reported unreadable Burmese glyphs and requested immediate video-overlay previews for all finish controls.
+
+# Live preview API and FFmpeg graph recovery — pending
+
+- [ ] Remove the unsupported private `streamlit.elements.image.image_to_url` call from the live preview path
+- [ ] Use a supported local frame preview path that still supports visible overlay editing
+- [ ] Rebuild filter graph labels and chain syntax so blur, subtitles, watermark, and logo can coexist
+- [ ] Add regression coverage for preview generation and filter graph validity
+- [ ] Run a real final MP4 render with the current Finish controls
+- [ ] Push the verified recovery fix to GitHub main
+
+ရက်စွဲ: 2026-08-26 — live screenshots reported missing `image_to_url` and FFmpeg `Filter not found`.
+
+# Floating overlay preview and FFmpeg compatibility recovery — pending
+
+- [x] Remove or pin the incompatible `streamlit-drawable-canvas`/private `image_to_url` path
+- [x] Show a supported floating video/frame preview immediately when blur or subtitle editing is selected
+- [x] Let manual drag/resize update blur, subtitle, logo, and watermark positions in the floating preview
+- [x] Ensure the same floating-preview state reaches final FFmpeg rendering
+- [x] Repair and test the combined blur/subtitle/watermark/logo filter chain
+- [x] Run full live-preview and real MP4 regression tests
+- [x] Push the verified fix to GitHub main
+
+ရက်စွဲ: 2026-08-26 — live screenshots reported `image_to_url` missing and FFmpeg `Filter not found`; user requested floating video/photo overlay editing.
