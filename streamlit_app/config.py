@@ -67,8 +67,19 @@ class EditorState:
     subtitle_size: int = 52
     subtitle_font: str = "Pyidaungsu Book Regular"
     subtitle_offset: float = 0.0
+    subtitle_x: int = 8
+    subtitle_y: int = 78
+    subtitle_w: int = 84
+    subtitle_h: int = 16
     logo_position: str = "Top Right"
     logo_motion: str = "Slow drift"
+    logo_x: int = 78
+    logo_y: int = 5
+    logo_w: int = 18
+    watermark_text: str = ""
+    watermark_x: int = 4
+    watermark_y: int = 5
+    watermark_size: int = 24
     music_name: str = ""
 
 

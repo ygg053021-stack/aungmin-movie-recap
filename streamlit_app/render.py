@@ -24,8 +24,16 @@ def _subtitle_filter(srt_path: str, effects: EditorState) -> str:
     fonts_dir = (Path(__file__).resolve().parent.parent / "fonts").as_posix().replace("'", "\\'")
     size = max(24, min(96, int(getattr(effects, "subtitle_size", 52))))
     position = getattr(effects, "subtitle_position", "Bottom")
-    alignment = {"Top": 8, "Center": 5, "Bottom": 2}.get(position, 2)
-    margin = {"Top": 90, "Center": 0, "Bottom": 110}.get(position, 110)
+    custom_x = int(getattr(effects, "subtitle_x", 8))
+    custom_y = int(getattr(effects, "subtitle_y", 78))
+    center_x = custom_x + int(getattr(effects, "subtitle_w", 84)) / 2
+    center_y = custom_y + int(getattr(effects, "subtitle_h", 16)) / 2
+    horizontal = "left" if center_x < 33 else ("right" if center_x > 66 else "center")
+    vertical = "top" if center_y < 33 else ("bottom" if center_y > 66 else "center")
+    alignment = {("left", "top"): 7, ("center", "top"): 8, ("right", "top"): 9,
+                 ("left", "center"): 4, ("center", "center"): 5, ("right", "center"): 6,
+                 ("left", "bottom"): 1, ("center", "bottom"): 2, ("right", "bottom"): 3}[(horizontal, vertical)]
+    margin = max(20, int((100 - min(100, custom_y + int(getattr(effects, "subtitle_h", 16)))) * 8))
     # ASS/SSA colours are AABBGGRR: this is opaque yellow with black outline.
     style = f"FontName={font},FontSize={size},PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment={alignment},MarginV={margin}"
     return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':force_style='{style}'"
@@ -79,24 +87,32 @@ def render_mp4(source_path: str, srt_path: str | None, voice_path: str | None, o
         command += ["-i", music_path]
     if logo_path:
         command += ["-loop", "1", "-i", logo_path]
+    current_video = "[vbase]"
+    watermark = str(getattr(effects, "watermark_text", "") or "").strip()
+    if watermark:
+        safe_watermark = watermark.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace("%", "\\%")[:80]
+        wx = max(0, min(100, int(getattr(effects, "watermark_x", 4))))
+        wy = max(0, min(100, int(getattr(effects, "watermark_y", 5))))
+        wsize = max(12, min(72, int(getattr(effects, "watermark_size", 24))))
+        watermark_font = (Path(__file__).resolve().parent.parent / "fonts" / "Pyidaungsu-Book-Regular.ttf").as_posix().replace(":", "\\:").replace("'", "\\'")
+        graph_parts.append(f"[vbase]drawtext=fontfile='{watermark_font}':text='{safe_watermark}':x=w*{wx/100:.4f}:y=h*{wy/100:.4f}:fontsize={wsize}:fontcolor=white@0.72:borderw=2:bordercolor=black@0.55[vwatermarked]")
+        current_video = "[vwatermarked]"
     if logo_path:
         position = getattr(effects, "logo_position", "Top Right")
         motion = getattr(effects, "logo_motion", "Slow drift")
-        if position == "Top Left":
-            x, y = "28", "28"
-        elif position == "Bottom Left":
-            x, y = "28", "main_h-overlay_h-28"
-        elif position == "Bottom Right":
-            x, y = "main_w-overlay_w-28", "main_h-overlay_h-28"
-        else:
-            x, y = "main_w-overlay_w-28", "28"
+        logo_x = max(0, min(95, int(getattr(effects, "logo_x", 78))))
+        logo_y = max(0, min(95, int(getattr(effects, "logo_y", 5))))
+        logo_w = max(5, min(60, int(getattr(effects, "logo_w", 18))))
+        x, y = f"main_w*{logo_x/100:.4f}", f"main_h*{logo_y/100:.4f}"
         if motion == "Slow drift":
             x = f"{x}+12*sin(t/5)" if x != "28" else "28+12*sin(t/5)"
             y = f"{y}+8*sin(t/6)" if y != "28" else "28+8*sin(t/6)"
         logo_index = 1 + int(bool(voice_path)) + int(bool(music_path))
-        graph_parts.append(f"[{logo_index}:v]format=rgba,scale=iw*0.18:-1,colorchannelmixer=aa=0.82[logo];[vbase][logo]overlay=x='{x}':y='{y}':shortest=1[vout]")
-    else:
+        graph_parts.append(f"[{logo_index}:v]format=rgba,scale=main_w*{logo_w/100:.4f}:-1,colorchannelmixer=aa=0.82[logo];{current_video}[logo]overlay=x='{x}':y='{y}':shortest=1[vout]")
+    elif current_video == "[vbase]":
         graph_parts[0] = graph_parts[0].replace("[vbase]", "[vout]")
+    else:
+        graph_parts.append(f"{current_video}null[vout]")
     if voice_path and music_path:
         graph_parts.append("[1:a]volume=1.0[voice];[2:a]volume=0.18[music];[voice][music]amix=inputs=2:duration=longest[aout]")
     command += ["-filter_complex", ";".join(graph_parts), "-map", "[vout]"]

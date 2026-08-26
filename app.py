@@ -13,7 +13,7 @@ from streamlit_app import (
     probe_duration, render_mp4, render_bundle_to_mp4, render_voice_preview, save_uploaded_file, duration_notice,
     validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
 )
-from streamlit_app.editor import add_preview_subtitle, extract_preview_frame, sync_blur_from_canvas, canvas_initial_drawing
+from streamlit_app.editor import add_preview_subtitle, extract_preview_frame, sync_blur_from_canvas, sync_overlays_from_canvas, canvas_initial_drawing
 
 st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""
@@ -231,7 +231,7 @@ with right:
     with tabs[3]:
         st.markdown("**No.3 approved recap ကို အဆုံးသတ်ပြင်ဆင်ရန်**")
         st.markdown('<div class="section-note">ဒီနေရာမှာ No.3 မှာ approve လုပ်ထားတဲ့ Burmese voice + video ကိုပဲ သုံးပါမယ်။ မူရင်းအသံကို ပြန်မထည့်ပါ။ Blur၊ manual subtitle၊ font၊ size၊ position နဲ့ logo ကို preview ကြည့်ပြီး ပြင်ပါမယ်။</div>', unsafe_allow_html=True)
-        selected_font = st.selectbox("Subtitle font / မြန်မာစာတန်းဖောင့်", FONT_PRESETS, index=4, key="subtitle_font")
+        selected_font = st.selectbox("Subtitle font / မြန်မာစာတန်းဖောင့်", FONT_PRESETS, index=3, key="subtitle_font")
         editor.subtitle_font = selected_font
         logo_upload = st.file_uploader("Logo upload / လိုဂိုထည့်ရန် (optional)", type=["png", "jpg", "jpeg"], key="logo_upload")
         if logo_upload:
@@ -241,7 +241,9 @@ with right:
         editor.logo_position = st.selectbox("Logo position / လိုဂိုနေရာ", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"], index=0, key="logo_position")
         editor.logo_motion = st.selectbox("Logo motion / လိုဂိုလှုပ်ရှားပုံ", ["Static", "Slow drift"], index=1, key="logo_motion")
         manual_subtitle = st.text_area("Manual Burmese subtitle / ကိုယ်တိုင်ထည့်မည့် စာတန်း", value=st.session_state.get("manual_subtitle", ""), height=100, key="manual_subtitle")
-        st.caption("Auto subtitle မမှန်ရင် ဒီနေရာမှာ ပြင်နိုင်ပါတယ်။ စာတန်းက ရွေးထားတဲ့ font/size/နေရာနဲ့ final video ထဲဝင်ပါမယ်။")
+        watermark_text = st.text_input("Watermark text / ရေစာစာသား (optional)", value=st.session_state.get("watermark_text", ""), key="watermark_text")
+        editor.watermark_text = watermark_text
+        st.caption("Auto subtitle မမှန်ရင် ဒီနေရာမှာ ပြင်နိုင်ပါတယ်။ စာတန်း၊ logo နဲ့ watermark ကို video preview ပေါ်မှာ ချက်ချင်းမြင်ပြီး ရွှေ့နိုင်ပါမယ်။")
         editor.speed = 1.0
         editor.flip = False
         blur_enabled = st.checkbox("Chinese/မူရင်းစာတန်းနေရာကို Blur ထည့်မယ်", value=editor.blur_strength > 0, key="blur_enabled")
@@ -257,30 +259,32 @@ with right:
             editor.blur_h = st.slider("Blur height %", 5, 60, editor.blur_h, 1)
         editor.subtitle_mode = "Burmese only"
         editor.subtitle_position = st.selectbox("Subtitle position / စာတန်းနေရာ", ["Bottom", "Center", "Top"], index=0, key="subtitle_position")
-        editor.subtitle_size = st.slider("Subtitle size / စာလုံးအရွယ်", 24, 84, 52, 2, key="subtitle_size")
+        editor.subtitle_size = st.slider("Subtitle size / စာလုံးအရွယ်", 24, 64, 42, 2, key="subtitle_size")
         editor.subtitle_font = st.session_state.get("subtitle_font", "Pyidaungsu Book Regular")
         editor.subtitle_offset = 0.0
-        if blur_enabled and blur_mode.startswith("Manual") and st.session_state.media_path:
-            st.markdown("**Blur / subtitle ကို video frame ပေါ်မှာ လက်နဲ့ရွှေ့ပါ**")
+        if st.session_state.media_path:
+            st.markdown("**Blur / subtitle / logo / watermark ကို video frame ပေါ်မှာ တိုက်ရိုက်ရွှေ့ပြီး ချိန်ပါ**")
             try:
                 from streamlit_drawable_canvas import st_canvas
                 frame = extract_preview_frame(st.session_state.media_path, width=720, height=405)
                 preview_text = st.session_state.get("manual_subtitle", "").strip() or (st.session_state.bundle or {}).get("subtitle_bn", "")
-                font_path = Path(__file__).resolve().parent / "fonts" / FONT_FILES.get(editor.subtitle_font, "Pyidaungsu-Book-Regular.ttf")
-                frame = add_preview_subtitle(frame, preview_text, str(font_path), editor.subtitle_size, editor.subtitle_position)
+                logo_path = st.session_state.get("logo_path")
+                canvas_key = f"finish_overlay_canvas_{editor.subtitle_font}_{editor.subtitle_size}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_strength}"
                 canvas_result = st_canvas(
                     fill_color="rgba(0, 0, 0, 0.58)", stroke_width=3, stroke_color="#70e8d8",
                     background_image=frame, update_streamlit=True, height=405, width=720,
-                    drawing_mode="transform", initial_drawing=canvas_initial_drawing(editor, 720, 405, "", FONT_FAMILIES.get(editor.subtitle_font, "Pyidaungsu Book")),
-                    display_toolbar=True, key="blur_subtitle_canvas",
+                    drawing_mode="transform", initial_drawing=canvas_initial_drawing(editor, 720, 405, preview_text, FONT_FAMILIES.get(editor.subtitle_font, "Pyidaungsu Book"), logo_path),
+                    display_toolbar=True, key=canvas_key,
                 )
                 editor, coords = sync_blur_from_canvas(editor, canvas_result.json_data, 720, 405)
+                editor = sync_overlays_from_canvas(editor, canvas_result.json_data, 720, 405)
                 if coords:
-                    st.caption(f"လက်ရှိ Blur region: X {coords[0]}% → Y {coords[1]}% · Width {coords[2]}% · Height {coords[3]}% — video frame ပေါ်မှာ ရွှေ့တာနဲ့ ချက်ချင်း update ဖြစ်သည်။")
+                    st.caption(f"လက်ရှိ Blur: X {coords[0]}% · Y {coords[1]}% · Width {coords[2]}% · Height {coords[3]}% — box ကို video ပေါ်မှာ ဖိဆွဲရွှေ့ပါ။")
+                st.caption(f"Subtitle: X {editor.subtitle_x}% · Y {editor.subtitle_y}% · Size {editor.subtitle_size}px · Logo: X {editor.logo_x}% · Y {editor.logo_y}% · Watermark: X {editor.watermark_x}% · Y {editor.watermark_y}%")
             except ImportError:
-                st.warning("Direct canvas editor မတက်သေးပါ။ sliders ဖြင့် manual ပြင်နိုင်ပါသည်။")
+                st.warning("Direct canvas editor package မတက်သေးပါ။")
             except Exception as exc:
-                st.warning(f"Preview editor မတက်နိုင်သေးပါ: {exc}")
+                st.warning(f"Live preview editor မတက်နိုင်သေးပါ: {exc}")
         output_platform = st.selectbox("Output format", PLATFORMS, format_func=lambda item: f"{item} · {RATIOS[item]}", key="output_platform")
         output_dimensions = {"16:9": "1920×1080", "9:16": "1080×1920", "1:1": "1080×1080", "3:4": "1080×1440"}.get(RATIOS[output_platform], "1920×1080")
         st.info(f"Final output: {output_dimensions} · 30 FPS · မူရင်း video ကြာချိန်အတိုင်း။ Source က resolution နိမ့်လျှင် upscale လုပ်မည်၊ မူရင်း detail အသစ်ဖန်တီးမည်မဟုတ်ပါ။")

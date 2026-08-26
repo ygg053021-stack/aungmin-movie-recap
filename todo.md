@@ -345,3 +345,16 @@
 - [x] Generate and fit each segment to its scene window, then concatenate the timeline to exactly the source duration
 - [x] Fall back safely to whole-script duration fitting if a model response has no valid segments
 - [x] Test scene segment parsing, audio timeline duration, subtitle timing, and final MP4 output
+
+# Live finish preview and Burmese glyph correction — pending
+
+- [x] Identify which supplied font renders Burmese incorrectly in the live output and choose a verified readable font as the default
+- [x] Fix Burmese subtitle shaping/outline/size so glyphs are readable and do not cover the entire video
+- [x] Show the actual video frame immediately when Blur is enabled and provide visible draggable blur coordinates
+- [x] Show subtitle text, position, and size directly over the video preview and update immediately when changed
+- [x] Show uploaded logo and watermark directly over the video preview with draggable position and size controls
+- [x] Ensure the exact preview state is used by the final MP4 render
+- [x] Run live-preview, font, coordinate, subtitle, logo, watermark, and MP4 regression tests
+- [ ] Push the verified live preview and font correction to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user reported unreadable Burmese glyphs and requested immediate video-overlay previews for all finish controls.

@@ -5,7 +5,7 @@ from pathlib import Path
 from streamlit_app.audio import make_srt
 from streamlit_app.config import FONT_PRESETS, EditorState
 from streamlit_app.render import _subtitle_filter, _video_graph
-from streamlit_app.editor import add_preview_subtitle, canvas_initial_drawing, sync_blur_from_canvas
+from streamlit_app.editor import add_preview_subtitle, canvas_initial_drawing, sync_blur_from_canvas, sync_overlays_from_canvas
 
 
 class ReferenceStyleTests(unittest.TestCase):
@@ -22,6 +22,27 @@ class ReferenceStyleTests(unittest.TestCase):
         self.assertIn("PrimaryColour=&H0000FFFF", filt)
         self.assertIn("Outline=3", filt)
         self.assertIn("Alignment=2", filt)
+
+    def test_watermark_uses_burmese_fontfile_and_coordinates(self):
+        from streamlit_app.render import render_mp4
+        source = Path(__file__).parent / "fonts" / "Pyidaungsu-Book-Regular.ttf"
+        self.assertTrue(source.is_file())
+        state = EditorState(watermark_text="AungMin", watermark_x=10, watermark_y=12, watermark_size=24)
+        import streamlit_app.render as render_module
+        original = render_module.subprocess.run
+        captured = []
+        try:
+            def fake_run(command, **kwargs):
+                captured.append(command)
+                return type("R", (), {"returncode": 1, "stderr": "probe"})()
+            render_module.subprocess.run = fake_run
+            with self.assertRaises(ValueError):
+                render_mp4("/tmp/source.mp4", None, None, "/tmp/out.mp4", state, "9:16")
+            command_text = " ".join(str(item) for item in captured[-1])
+            self.assertIn("fontfile", command_text)
+            self.assertIn("watermark", command_text)
+        finally:
+            render_module.subprocess.run = original
 
     def test_blur_graph_is_region_only(self):
         state = EditorState(blur_strength=28, blur_x=5, blur_y=72, blur_w=90, blur_h=18)
@@ -47,12 +68,25 @@ class ReferenceStyleTests(unittest.TestCase):
         self.assertNotEqual(rendered.tobytes(), frame.tobytes())
 
     def test_dragged_blur_coordinates_sync_to_editor_state(self):
-        state = EditorState()
+        state = EditorState(blur_strength=28)
         drawing = canvas_initial_drawing(state, 720, 405, "မြန်မာစာတန်း", "Pyidaungsu Book")
         drawing["objects"][0].update({"left": 144, "top": 243, "width": 360, "height": 81})
         state, coords = sync_blur_from_canvas(state, __import__("json").dumps(drawing), 720, 405)
         self.assertEqual(coords, (20, 60, 50, 20))
         self.assertEqual((state.blur_x, state.blur_y, state.blur_w, state.blur_h), coords)
+
+    def test_live_canvas_contains_and_syncs_finish_overlays(self):
+        state = EditorState(blur_strength=28, watermark_text="AungMin")
+        drawing = canvas_initial_drawing(state, 720, 405, "မြန်မာ recap", "Pyidaungsu Book")
+        names = {obj.get("name") for obj in drawing["objects"]}
+        self.assertIn("blur", names)
+        self.assertIn("subtitle", names)
+        self.assertIn("watermark", names)
+        payload = __import__("json").dumps(drawing)
+        drawing["objects"][1].update({"left": 216, "top": 202, "fontSize": 32})
+        state = sync_overlays_from_canvas(state, __import__("json").dumps(drawing), 720, 405)
+        self.assertEqual(state.subtitle_x, 30)
+        self.assertEqual(state.subtitle_y, 50)
 
     def test_srt_uses_scene_timestamps_when_available(self):
         with tempfile.TemporaryDirectory() as folder:

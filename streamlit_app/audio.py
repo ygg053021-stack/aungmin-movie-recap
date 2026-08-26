@@ -5,6 +5,25 @@ import tempfile
 from pathlib import Path
 
 
+def _wrap_caption(text: str, max_chars: int = 34) -> str:
+    compact = " ".join(str(text or "").split())
+    if len(compact) <= max_chars:
+        return compact
+    words = compact.split(" ")
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if current and len(candidate) > max_chars:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return "\n".join(lines[:3])
+
+
 def stamp(seconds: float) -> str:
     total = max(0, int(seconds))
     return f"00:{total // 60:02d}:{total % 60:02d},000"
@@ -42,7 +61,7 @@ def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode
                 english = ""
             if mode == "English only":
                 line = english or line
-            caption = line[:220] + (f"\n{english[:220]}" if english and mode == "Burmese + English" else "")
+            caption = _wrap_caption(line[:220]) + (f"\n{_wrap_caption(english[:220])}" if english and mode == "Burmese + English" else "")
             handle.write(f"{index}\n{stamp(start)} --> {stamp(end)}\n{caption}\n\n")
 
 
