@@ -14,6 +14,50 @@ from .media import probe_duration
 ProgressCallback = Callable[[int, str, float], None]
 
 
+def render_voice_preview(
+    media_path: str,
+    bundle: dict,
+    voice_name: str,
+    editor: EditorState,
+    output_platform: str,
+    progress: ProgressCallback | None = None,
+) -> dict:
+    """Create a reviewable voice-only recap preview using approved script text.
+
+    The original audio is replaced by the generated Burmese narration. Finish-stage
+    subtitles and blur are intentionally deferred until the user approves the voice.
+    """
+    recap = str(bundle.get("recap_bn", "")).strip()
+    if not recap:
+        raise ValueError("အတည်ပြုထားသော Burmese recap script မရှိသေးပါ။")
+    if not media_path or not Path(media_path).is_file():
+        raise ValueError("Voice preview အတွက် original video file မတွေ့ပါ။")
+    root = Path(tempfile.gettempdir()) / "aungmin-approved-voice"
+    root.mkdir(parents=True, exist_ok=True)
+    voice_path = root / "approved-voice.mp3"
+    blank_srt = root / "no-finish-subtitles.srt"
+    output_path = root / "approved-voice-preview.mp4"
+    started = time.monotonic()
+    if progress:
+        progress(12, "အတည်ပြုထားသော script မှ မြန်မာအသံ ဖန်တီးနေသည်", started)
+    create_voiceover(recap, str(voice_path), voice_name)
+    blank_srt.write_text("", encoding="utf-8")
+    if progress:
+        progress(55, "မူရင်းအသံကို ဖယ်ပြီး recap voice preview ပေါင်းနေသည်", started)
+    ratio = {"YouTube": "16:9", "TikTok": "9:16", "Facebook": "1:1"}.get(output_platform, "16:9")
+    preview_editor = EditorState(speed=1.0, flip=False, blur_strength=0)
+    render_mp4(media_path, str(blank_srt), str(voice_path), str(output_path), preview_editor, ratio)
+    if not output_path.is_file() or output_path.stat().st_size < 1024:
+        raise ValueError("Voice preview MP4 မဖန်တီးနိုင်ပါ။")
+    if progress:
+        progress(100, "Voice preview အဆင်သင့်ဖြစ်ပါပြီ", started)
+    return {
+        "voice_path": str(voice_path),
+        "video_bytes": output_path.read_bytes(),
+        "voice_duration": probe_duration(str(voice_path)),
+    }
+
+
 def render_bundle_to_mp4(
     media_path: str,
     bundle: dict,
@@ -22,6 +66,7 @@ def render_bundle_to_mp4(
     output_platform: str,
     progress: ProgressCallback | None = None,
     logo_path: str | None = None,
+    approved_voice_path: str | None = None,
 ) -> bytes:
     """Create and verify the final MP4 from one completed recap bundle.
 
@@ -48,7 +93,10 @@ def render_bundle_to_mp4(
             progress(10, "Video ကို စစ်နေသည်", started)
         if progress:
             progress(25, "မြန်မာအသံ ဖန်တီးနေသည်", started)
-        create_voiceover(recap, str(voice_path), voice_name)
+        if approved_voice_path and Path(approved_voice_path).is_file():
+            voice_path.write_bytes(Path(approved_voice_path).read_bytes())
+        else:
+            create_voiceover(recap, str(voice_path), voice_name)
         if not voice_path.is_file() or voice_path.stat().st_size < 1024:
             raise ValueError("မြန်မာအသံဖိုင် မဖန်တီးနိုင်ပါ။")
 

@@ -317,3 +317,15 @@
 - [x] Push the supplied-font and direct-editor changes to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user supplied 11 TTF files and requested direct video-overlay blur/subtitle editing.
+
+# Confirmed four-stage workflow rebuild — pending
+
+- [x] Make 01 Source contain upload/link and immediate original preview only
+- [x] Make 02 Recap contain Burmese translated/script text only, with editable approval before voice generation
+- [x] Make 03 Voice contain Burmese narration/recap generation, original audio replacement, voice profile preview, and regenerate-after-edit flow
+- [x] Make 04 Finish consume only the approved No.3 recap video and provide live blur/subtitle/font/size/position/logo finishing
+- [x] Ensure final MP4 uses the approved narration and edited visual state without restoring original audio
+- [x] Run full four-stage workflow, audio replacement, timing, overlay, font, and MP4 regression tests
+- [ ] Push the verified four-stage workflow rebuild to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user confirmed the exact Source → Script → Voice/Recap → Finish workflow and requested GitHub implementation.

@@ -10,7 +10,7 @@ from streamlit_app import (
     APP_NAME, EditorState, FONT_FAMILIES, FONT_FILES, FONT_PRESETS, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
     create_voiceover, download_authorized_source, embed_preview_html,
     generate_recap_bundle, generate_recap_from_transcript, inspect_source, make_srt, preview_html,
-    probe_duration, render_mp4, render_bundle_to_mp4, save_uploaded_file, duration_notice,
+    probe_duration, render_mp4, render_bundle_to_mp4, render_voice_preview, save_uploaded_file, duration_notice,
     validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
 )
 from streamlit_app.editor import add_preview_subtitle, extract_preview_frame, sync_blur_from_canvas, canvas_initial_drawing
@@ -56,6 +56,9 @@ if "api_key" not in st.session_state: st.session_state.api_key = ""
 if "bundle" not in st.session_state: st.session_state.bundle = None
 if "transcript" not in st.session_state: st.session_state.transcript = None
 if "final_video" not in st.session_state: st.session_state.final_video = None
+if "voice_preview" not in st.session_state: st.session_state.voice_preview = None
+if "script_approved" not in st.session_state: st.session_state.script_approved = False
+if "voice_approved" not in st.session_state: st.session_state.voice_approved = False
 if "editor" not in st.session_state: st.session_state.editor = EditorState()
 editor = st.session_state.editor
 
@@ -96,7 +99,7 @@ with left:
 with right:
     st.markdown('<div class="workspace panel">', unsafe_allow_html=True)
     st.markdown('<div class="panel-head"><div class="panel-title">Production control room</div><div class="ready">● 01–04 selectable</div></div>', unsafe_allow_html=True)
-    tabs = st.tabs(["01 · Source", "02 · Recap", "03 · Voice", "04 · Finish"])
+    tabs = st.tabs(["01 · Source", "02 · Voice script", "03 · Recap voice", "04 · Finish"])
     with tabs[0]:
         mode = st.radio("Input type", ["Upload video", "Paste video link"], horizontal=True, key="input_mode")
         uploaded = st.file_uploader("Upload video file", type=["mp4", "mov", "webm", "mkv"], key="source_upload") if mode == "Upload video" else None
@@ -138,6 +141,9 @@ with right:
                                 st.info(str(transcript_exc))
                 st.session_state.final_video = None
                 st.session_state.bundle = None
+                st.session_state.voice_preview = None
+                st.session_state.script_approved = False
+                st.session_state.voice_approved = False
                 if st.session_state.media_path:
                     st.success("Original video loaded. Preview is ready on the left.")
                 else:
@@ -145,9 +151,87 @@ with right:
             except (ValueError, ImportError) as exc:
                 st.error(str(exc))
     with tabs[1]:
-        style = st.selectbox("Recap narration style / ဇာတ်ကြောင်းပြောဟန်", ["ရုပ်ရှင်ဆန်သော ဇာတ်ကြောင်းပြောဟန်", "စိတ်လှုပ်ရှားဖွယ် ဇာတ်ကြောင်းပြောဟန်", "တည်ငြိမ်ပြီး ရှင်းလင်းသောဟန်", "လျှို့ဝှက်ဆန်းကြယ်သောဟန်", "ဝမ်းနည်းနက်ရှိုင်းသောဟန်"], index=0, key="recap_style")
+        style = st.selectbox("Recap script style / ဇာတ်ကြောင်းရေးဟန်", ["ရုပ်ရှင်ဆန်သော ဇာတ်ကြောင်းရေးဟန်", "စိတ်လှုပ်ရှားဖွယ် ဇာတ်ကြောင်းရေးဟန်", "တည်ငြိမ်ပြီး ရှင်းလင်းသောဟန်", "လျှို့ဝှက်ဆန်းကြယ်သောဟန်", "ဝမ်းနည်းနက်ရှိုင်းသောဟန်"], index=0, key="recap_style")
         detail = "Essential"
-        selected_font = st.selectbox("Subtitle font / မြန်မာစာတန်းဖောင့် (၁၀ မျိုး)", FONT_PRESETS, index=1, key="subtitle_font")
+        st.markdown('<div class="section-note">ဒီအဆင့်မှာ ဘာသာပြန်ထားတဲ့ Burmese recap script စာသားပဲ ထုတ်ပါမယ်။ Voice နဲ့ MP4 ကို No.3 မှာပဲ ထုတ်ပါမယ်။ စာမူကိုဖတ်ပြီး ကြိုက်မှ Approve လုပ်ပါ။</div>', unsafe_allow_html=True)
+        if st.button("Burmese recap script ထုတ်မယ်", type="primary", use_container_width=True):
+            if not st.session_state.media_path and not st.session_state.transcript:
+                st.error("01 · Source မှာ video upload သို့မဟုတ် public transcript ရအောင် အရင်လုပ်ပါ။")
+            elif not st.session_state.api_key:
+                st.error("01 · Source ထဲမှာ Google AI Studio API key ထည့်ပြီးမှ စတင်ပါ။")
+            else:
+                progress = st.progress(0, text="Script ထုတ်ရန် ပြင်ဆင်နေသည်…")
+                timing = st.empty()
+                started = time.monotonic()
+                try:
+                    def update_script_progress(percent: int, message: str, pipeline_started: float) -> None:
+                        progress.progress(min(95, max(8, percent)), text=f"{message}…")
+                        timing.caption(f"ကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
+                    if st.session_state.media_path:
+                        bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, 1.0, False, update_script_progress)
+                    else:
+                        bundle = generate_recap_from_transcript(st.session_state.api_key, st.session_state.transcript, style, detail)
+                    st.session_state.bundle = bundle
+                    st.session_state.script_approved = False
+                    st.session_state.voice_preview = None
+                    progress.progress(100, text="Burmese recap script အဆင်သင့်ဖြစ်ပါပြီ")
+                    timing.caption(f"စုစုပေါင်းကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
+                except (ValueError, ImportError, OSError) as exc:
+                    progress.empty()
+                    timing.empty()
+                    st.error(f"Script မထုတ်နိုင်ပါ: {exc}")
+        if st.session_state.bundle:
+            edited_script = st.text_area("Burmese recap script / ပြင်ဆင်ရန်", st.session_state.bundle["recap_bn"], height=220, key="editable_recap")
+            if st.button("ဒီ script ကို အတည်ပြုပြီး No.3 Voice သို့ ဆက်မယ်", type="primary", use_container_width=True):
+                st.session_state.bundle["recap_bn"] = edited_script.strip()
+                st.session_state.bundle["subtitle_bn"] = edited_script.strip()
+                st.session_state.script_approved = bool(edited_script.strip())
+                if st.session_state.script_approved:
+                    st.success("Script အတည်ပြုပြီးပါပြီ။ No.3 · Voice ကိုဖွင့်ပြီး narration ထုတ်ပါ။")
+                else:
+                    st.error("Script အလွတ်မဖြစ်ရပါ။")
+            if st.session_state.script_approved:
+                st.success("Script approved — No.3 Voice မှာ အသံ preview ထုတ်နိုင်ပါပြီ။")
+    with tabs[2]:
+        voice_labels = {"my-MM-NilarNeural": "အမျိုးသမီးအသံ — ကြည်လင်ပြီး တည်ငြိမ်သောဟန်", "my-MM-ThihaNeural": "အမျိုးသားအသံ — နက်ရှိုင်းပြီး ရုပ်ရှင်ဆန်သောဟန်", "en-US-AriaNeural": "အင်္ဂလိပ်အသံ — အရေးပေါ်အစားထိုးအသံ"}
+        voice_name = st.selectbox("Voice profile / မြန်မာအသံပုံစံ", list(VOICE_NAMES), index=1, format_func=lambda name: voice_labels.get(name, name), key="voice_name")
+        st.markdown('<div class="section-note">No.2 မှာ အတည်ပြုထားတဲ့ script ကိုပဲ အသံပြောင်းပါမယ်။ မူရင်း video အသံကို ဖျက်ပြီး Burmese recap narration တစ်ခုတည်းနဲ့ preview ထုတ်ပါမယ်။</div>', unsafe_allow_html=True)
+        if st.button("Burmese recap voice preview ထုတ်မယ်", type="primary", use_container_width=True):
+            if not st.session_state.bundle or not st.session_state.script_approved:
+                st.error("02 · Recap မှာ script ကို အရင် Generate လုပ်ပြီး Approve လုပ်ပါ။")
+            elif not st.session_state.media_path:
+                st.error("03 · Voice preview အတွက် original video file လိုပါမယ်။")
+            else:
+                progress = st.progress(0, text="Voice preview ပြင်ဆင်နေသည်…")
+                timing = st.empty()
+                started = time.monotonic()
+                try:
+                    def update_voice_progress(percent: int, message: str, pipeline_started: float) -> None:
+                        progress.progress(min(99, max(8, percent)), text=f"{message}…")
+                        timing.caption(f"ကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
+                    voice_preview = render_voice_preview(st.session_state.media_path, st.session_state.bundle, voice_name, editor, st.session_state.get("output_platform", "YouTube"), update_voice_progress)
+                    st.session_state.voice_preview = voice_preview
+                    st.session_state.voice_approved = False
+                    progress.progress(100, text="Voice preview အဆင်သင့်ဖြစ်ပါပြီ")
+                    timing.caption(f"စုစုပေါင်းကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
+                except (ValueError, ImportError, OSError) as exc:
+                    progress.empty()
+                    timing.empty()
+                    st.error(f"Voice preview မထုတ်နိုင်ပါ: {exc}")
+        if st.session_state.voice_preview:
+            st.audio(st.session_state.voice_preview["voice_path"])
+            voice_preview_path = Path(tempfile.gettempdir()) / "aungmin-approved-voice-preview.mp4"
+            voice_preview_path.write_bytes(st.session_state.voice_preview["video_bytes"])
+            st.video(str(voice_preview_path), start_time=0)
+            st.caption(f"Voice duration: {st.session_state.voice_preview['voice_duration']:.1f}s · မူရင်းအသံကို ဖယ်ထားသည်။")
+            if st.button("ဒီ Burmese voice ကို အတည်ပြုပြီး No.4 Finish သို့ ဆက်မယ်", type="primary", use_container_width=True):
+                st.session_state.voice_approved = True
+            if st.session_state.get("voice_approved"):
+                st.success("Voice approved — No.4 Finish မှာ blur၊ subtitle၊ font၊ size၊ position နဲ့ logo ကို ချိန်နိုင်ပါပြီ။")
+    with tabs[3]:
+        st.markdown("**No.3 approved recap ကို အဆုံးသတ်ပြင်ဆင်ရန်**")
+        st.markdown('<div class="section-note">ဒီနေရာမှာ No.3 မှာ approve လုပ်ထားတဲ့ Burmese voice + video ကိုပဲ သုံးပါမယ်။ မူရင်းအသံကို ပြန်မထည့်ပါ။ Blur၊ manual subtitle၊ font၊ size၊ position နဲ့ logo ကို preview ကြည့်ပြီး ပြင်ပါမယ်။</div>', unsafe_allow_html=True)
+        selected_font = st.selectbox("Subtitle font / မြန်မာစာတန်းဖောင့်", FONT_PRESETS, index=4, key="subtitle_font")
         editor.subtitle_font = selected_font
         logo_upload = st.file_uploader("Logo upload / လိုဂိုထည့်ရန် (optional)", type=["png", "jpg", "jpeg"], key="logo_upload")
         if logo_upload:
@@ -156,63 +240,11 @@ with right:
             st.session_state.logo_path = None
         editor.logo_position = st.selectbox("Logo position / လိုဂိုနေရာ", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"], index=0, key="logo_position")
         editor.logo_motion = st.selectbox("Logo motion / လိုဂိုလှုပ်ရှားပုံ", ["Static", "Slow drift"], index=1, key="logo_motion")
-        manual_subtitle = st.text_area("Manual Burmese subtitle / ကိုယ်တိုင်ထည့်မည့် စာတန်း", value=st.session_state.get("manual_subtitle", ""), height=90, key="manual_subtitle")
-        st.caption("စာတန်းကို auto မရလျှင် ဒီနေရာမှာ ပြင်ရေးနိုင်ပါသည်။ Final render မှာ ရွေးထားသော font/size/နေရာနဲ့ ထည့်ပေးမည်။")
-        st.caption("Unicode font များကိုသာ အသုံးပြုထားသောကြောင့် မြန်မာစာလုံးများ အဝိုင်း/လေးထောင့်ဖြစ်ခြင်းကို လျှော့ချပေးပါသည်။")
-        st.markdown('<div class="section-note">Quick Recap သည် video file ရှိလျှင် visuals/audio ကို အသုံးပြုမည်။ YouTube download မရလျှင် public transcript ကို အသုံးပြုပြီး မြန်မာဇာတ်ကြောင်း၊ မြန်မာအသံနှင့် မြန်မာစာတန်းထိုးအတွက် ပြင်ဆင်မည်။</div>', unsafe_allow_html=True)
-        if st.session_state.transcript:
-            st.info("YouTube public transcript ready — video download မလိုဘဲ recap script ထုတ်နိုင်ပါပြီ။ Final MP4 အတွက်တော့ authorized video file upload လိုပါမယ်။")
-        if st.button("Quick Recap + MP4 တစ်ခါတည်း စတင်မယ်", type="primary", use_container_width=True):
-            if not st.session_state.media_path:
-                st.error("Final MP4 ထုတ်ရန် video file ကို အရင် upload လုပ်ပါ။ YouTube preview/transcript တစ်ခုတည်းနဲ့ MP4 မထုတ်နိုင်ပါ။")
-            elif not st.session_state.api_key:
-                st.error("01 · Source ထဲမှာ Google AI Studio API key ထည့်ပြီးမှ စတင်ပါ။")
-            else:
-                progress = st.progress(0, text="စတင်ရန် ပြင်ဆင်နေသည်…")
-                timing = st.empty()
-                started = time.monotonic()
-                try:
-                    def update_progress(percent: int, message: str, pipeline_started: float) -> None:
-                        progress.progress(min(99, max(8, percent)), text=f"{message}…")
-                        timing.caption(f"ကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
-
-                    update_progress(8, "Video ကို စစ်နေသည်", started)
-                    st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip, update_progress)
-                    update_progress(42, "မြန်မာ recap script ပြီးပါပြီ — voice/subtitle ပြင်ဆင်နေသည်", started)
-
-                    selected_voice = st.session_state.get("voice_name", "my-MM-ThihaNeural")
-                    selected_platform = st.session_state.get("output_platform", "YouTube")
-                    render_bundle = dict(st.session_state.bundle)
-                    manual_text = st.session_state.get("manual_subtitle", "").strip()
-                    if manual_text:
-                        render_bundle["subtitle_bn"] = manual_text
-                    final_bytes = render_bundle_to_mp4(st.session_state.media_path, render_bundle, selected_voice, editor, selected_platform, update_progress, st.session_state.get("logo_path"))
-                    if not final_bytes:
-                        raise ValueError("Final MP4 data မရပါ။")
-                    st.session_state.final_video = final_bytes
-                    progress.progress(100, text="Final MP4 အဆင်သင့်ဖြစ်ပါပြီ")
-                    timing.caption(f"စုစုပေါင်းကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
-                    st.success("Recap script၊ မြန်မာအသံ၊ မြန်မာစာတန်းနဲ့ Final MP4 အားလုံးပြီးပါပြီ။")
-                    st.rerun()
-                except (ValueError, ImportError, OSError) as exc:
-                    st.session_state.bundle = None
-                    st.session_state.final_video = None
-                    progress.empty()
-                    timing.empty()
-                    st.error(f"Recap/MP4 မပြီးပါ: {exc}")
-        if st.session_state.bundle:
-            st.text_area("Editable Burmese recap", st.session_state.bundle["recap_bn"], height=170, key="editable_recap")
-            st.caption("ဒီစာမူကို ပြင်ပြီးနောက် Final tab က render ခလုတ်ကိုသုံးနိုင်ပါတယ်။")
-    with tabs[2]:
-        voice_labels = {"my-MM-NilarNeural": "အမျိုးသမီးအသံ — ကြည်လင်ပြီး တည်ငြိမ်သောဟန်", "my-MM-ThihaNeural": "အမျိုးသားအသံ — နက်ရှိုင်းပြီး ရုပ်ရှင်ဆန်သောဟန်", "en-US-AriaNeural": "အင်္ဂလိပ်အသံ — အရေးပေါ်အစားထိုးအသံ"}
-        voice_name = st.selectbox("Voice profile / မြန်မာအသံပုံစံ", list(VOICE_NAMES), index=1, format_func=lambda name: voice_labels.get(name, name), key="voice_name")
-        audio_speed = 1.0
-        st.markdown('<div class="section-note">ရွေးထားသော မြန်မာအသံပုံစံဖြင့် narration ထုတ်မည်။ အသံနှင့် မြန်မာစာတန်းထိုးကို တစ်ကြိမ်တည်း render လုပ်မည်။</div>', unsafe_allow_html=True)
-    with tabs[3]:
-        st.markdown("**အလိုအလျောက်ပြင်ဆင်မှု** — မြန်မာ recap အတွက် ရိုးရှင်းသော output")
+        manual_subtitle = st.text_area("Manual Burmese subtitle / ကိုယ်တိုင်ထည့်မည့် စာတန်း", value=st.session_state.get("manual_subtitle", ""), height=100, key="manual_subtitle")
+        st.caption("Auto subtitle မမှန်ရင် ဒီနေရာမှာ ပြင်နိုင်ပါတယ်။ စာတန်းက ရွေးထားတဲ့ font/size/နေရာနဲ့ final video ထဲဝင်ပါမယ်။")
         editor.speed = 1.0
         editor.flip = False
-        blur_enabled = st.checkbox("Chinese စာတန်းနေရာကို Blur ထည့်မယ်", value=editor.blur_strength > 0, key="blur_enabled")
+        blur_enabled = st.checkbox("Chinese/မူရင်းစာတန်းနေရာကို Blur ထည့်မယ်", value=editor.blur_strength > 0, key="blur_enabled")
         blur_mode = st.selectbox("Blur mode / အုပ်မည့်နည်း", ["Auto default (အောက်ခြေစာတန်း)", "Manual drag (video ပေါ်ရွှေ့ရန်)"], index=0, key="blur_mode", disabled=not blur_enabled)
         editor.blur_strength = st.slider("Blur strength / အုပ်အား", 0, 60, 28, 2, disabled=not blur_enabled) if blur_enabled else 0
         if blur_enabled and blur_mode.startswith("Auto"):
@@ -255,20 +287,26 @@ with right:
         music_path = None
         st.markdown('<div class="section-note">Blur ကို privacy/editing အတွက်သာ အသုံးပြုမည်။ Final video တွင် မြန်မာ voice narration နှင့် မြန်မာ subtitle တစ်မျိုးတည်း ပါမည်။</div>', unsafe_allow_html=True)
         if st.button("Render final recap video", type="primary", use_container_width=True):
-            if not st.session_state.bundle:
-                st.error("Generate and review the Burmese recap first.")
+            if not st.session_state.bundle or not st.session_state.script_approved:
+                st.error("02 · Recap မှာ script ကို အရင် Generate လုပ်ပြီး Approve လုပ်ပါ။")
+            elif not st.session_state.voice_preview or not st.session_state.voice_approved:
+                st.error("03 · Voice မှာ Burmese recap voice ကို အရင်ထုတ်ပြီး Approve လုပ်ပါ။")
             elif not st.session_state.media_path:
                 st.error("Transcript recap script ရပါပြီ။ Final MP4 render အတွက် authorized video file ကို upload လုပ်ပါ။")
             else:
                 st.session_state.final_video = None
-                with st.spinner("Rendering Burmese voiceover, subtitles, effects, and 1080p/30fps MP4 preview…"):
+                with st.spinner("No.3 approved Burmese voice၊ subtitles၊ effects နဲ့ 1080p/30fps MP4 ပေါင်းနေသည်…"):
                     try:
                         with tempfile.TemporaryDirectory() as workdir:
                             srt_path = str(Path(workdir) / "captions.srt")
                             voice_path = str(Path(workdir) / "voice.mp3")
                             output_path = str(Path(workdir) / "aungmin-recap.mp4")
                             duration = probe_duration(st.session_state.media_path)
-                            create_voiceover(st.session_state.bundle["recap_bn"], voice_path, voice_name)
+                            approved_voice_path = st.session_state.voice_preview.get("voice_path") if st.session_state.voice_preview else None
+                            if approved_voice_path and Path(approved_voice_path).is_file():
+                                Path(voice_path).write_bytes(Path(approved_voice_path).read_bytes())
+                            else:
+                                create_voiceover(st.session_state.bundle["recap_bn"], voice_path, voice_name)
                             voice_duration = probe_duration(voice_path)
                             subtitle_duration = min(duration, voice_duration) if voice_duration > 0 else duration
                             render_bundle = dict(st.session_state.bundle)
