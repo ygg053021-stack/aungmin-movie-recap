@@ -335,6 +335,6 @@
 - [x] Make No.3 voice-only preview skip the subtitle filter instead of passing an empty SRT file to FFmpeg/libass
 - [x] Keep No.4 Finish subtitle rendering on a valid generated/manual SRT file
 - [x] Add regression test for subtitle-free approved voice preview and rerun full MP4 tests
-- [ ] Push the Voice preview fix to GitHub main
+- [x] Push the Voice preview fix to GitHub main
 
 ရက်စွဲ: 2026-08-26 — live screenshot reported FFmpeg/libass `Unable to open ... no-finish-subtitles.srt` during No.3 Voice preview.
