@@ -196,7 +196,8 @@ with right:
                             if not output_file.is_file() or output_file.stat().st_size < 1024:
                                 raise ValueError("Final MP4 was not created. Nothing is available to download.")
                             st.session_state.final_video = output_file.read_bytes()
-                        st.success("Final MP4 ready. Open the Final recap tab on the left before downloading.")
+                        st.success("Final MP4 ready. Final recap preview ကို ပြန်ဖွင့်နေပါတယ်…")
+                        st.rerun()
                     except (ValueError, ImportError, OSError) as exc:
                         st.session_state.final_video = None
                         st.error(f"Render မပြီးသေးပါ: {exc}")
