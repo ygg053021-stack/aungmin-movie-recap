@@ -1,6 +1,7 @@
-streamlit>=1.40,<2
+streamlit>=1.45.0,<2
 yt-dlp>=2025.1.15
 edge-tts>=7.0.0
 imageio-ffmpeg>=0.6.0
 youtube-transcript-api>=1.2.3
 google-genai>=2.19.0
+Pillow>=10.0.0

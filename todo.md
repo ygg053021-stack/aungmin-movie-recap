@@ -263,3 +263,12 @@
 
 - [ ] Sync the latest accepted project files, including mediaRender.ts and ACCEPTANCE.md, into GitHub main.
 - [ ] Verify the new remote commit includes the media backend source and handoff documentation.
+
+# Gemini 503 high-demand recovery — pending
+
+- [x] Fix Gemini 503 high-demand failures with retry/backoff and stable model fallback while preserving the AungMin UI
+- [x] Match the reference google-genai SDK request pattern for text analysis and keep errors actionable
+- [x] Re-run syntax, unit, Streamlit startup, and real MP4 regression tests after the 503 fix
+- [ ] Push the verified 503 fix to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user reported live `Gemini analysis failed (503)` high-demand error and requested immediate GitHub fix.

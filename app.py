@@ -151,15 +151,13 @@ with right:
                 timing = st.empty()
                 started = time.monotonic()
                 try:
-                    progress.progress(8, text="Video ကို စစ်နေသည်…")
-                    timing.caption("ကြာချိန်: 0 စက္ကန့်")
-                    st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip)
-                    progress.progress(42, text="မြန်မာ recap script ပြီးပါပြီ — voice/subtitle ပြင်ဆင်နေသည်…")
-                    timing.caption(f"ကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
-
                     def update_progress(percent: int, message: str, pipeline_started: float) -> None:
-                        progress.progress(min(99, max(42, percent)), text=f"{message}…")
+                        progress.progress(min(99, max(8, percent)), text=f"{message}…")
                         timing.caption(f"ကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
+
+                    update_progress(8, "Video ကို စစ်နေသည်", started)
+                    st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip, update_progress)
+                    update_progress(42, "မြန်မာ recap script ပြီးပါပြီ — voice/subtitle ပြင်ဆင်နေသည်", started)
 
                     selected_voice = st.session_state.get("voice_name", "my-MM-NilarNeural")
                     selected_platform = st.session_state.get("output_platform", "YouTube")
