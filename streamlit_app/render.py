@@ -2,6 +2,7 @@ import base64
 import re
 import subprocess
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from .config import EditorState, SourceInfo
 
@@ -48,9 +49,12 @@ def embed_preview_html(source: SourceInfo) -> str | None:
     if source.platform != "YouTube":
         return None
     parsed = urlparse(source.url)
-    video_id = parsed.path.rstrip("/").split("/")[-1] if "youtu.be" in (parsed.hostname or "") else ""
+    host = (parsed.hostname or "").lower()
+    path_parts = [part for part in parsed.path.split("/") if part]
+    video_id = path_parts[-1] if host in {"youtu.be", "www.youtu.be"} and path_parts else ""
+    if path_parts and path_parts[0] in {"shorts", "embed", "live"}:
+        video_id = path_parts[1] if len(path_parts) > 1 else ""
     if parsed.query:
-        from urllib.parse import parse_qs
         video_id = parse_qs(parsed.query).get("v", [video_id])[0]
     if not video_id:
         return None
