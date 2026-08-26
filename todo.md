@@ -392,15 +392,15 @@
 
 ရက်စွဲ: 2026-08-26 — screen recording confirmed the requested floating-photo editing behavior; live app still reported missing component directory.
 
-# Real source-frame floating preview correction — pending
+# Real source-frame floating preview correction — completed
 
-- [ ] Use an actual extracted frame from the uploaded source video instead of a blank white canvas background
-- [ ] Refresh the floating preview frame when the user changes the preview timestamp
-- [ ] Keep blur, subtitle, logo, and watermark coordinates synchronized with the real source frame
-- [ ] Make subtitle preview size/line wrapping match the final export geometry
-- [ ] Validate Burmese font shaping with a verified readable font and preserve the user's font choices
-- [ ] Run real source-frame preview, overlay sync, subtitle, and MP4 regression tests
-- [ ] Push the verified real-frame preview correction to GitHub main
+- [x] Use an actual extracted frame from the uploaded source video instead of a blank white canvas background
+- [x] Refresh the floating preview frame when the user changes the preview timestamp
+- [x] Keep blur, subtitle, logo, and watermark coordinates synchronized with the real source frame
+- [x] Make subtitle preview size/line wrapping match the final export geometry
+- [x] Validate Burmese font shaping with a verified readable font and preserve the user's font choices
+- [x] Run real source-frame preview, overlay sync, subtitle, and MP4 regression tests
+- [x] Push the verified real-frame preview correction to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user reported blank/white floating preview and requested the actual source-video image with exact live overlay feedback.
 
