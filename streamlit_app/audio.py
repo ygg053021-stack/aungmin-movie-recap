@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 
-def _wrap_caption(text: str, max_chars: int = 22) -> str:
+def wrap_caption(text: str, max_chars: int = 22) -> str:
     """Keep Burmese captions compact enough for portrait and landscape output."""
     compact = " ".join(str(text or "").replace("\n", " ").split())
     if len(compact) <= max_chars:
@@ -32,22 +32,32 @@ def stamp(seconds: float) -> str:
     return f"00:{total // 60:02d}:{total % 60:02d},000"
 
 
-def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode: str = "Burmese + English") -> None:
+def caption_units(bundle: dict, mode: str = "Burmese + English", max_chars: int = 22) -> list[str]:
     bn = [line.strip() for line in bundle.get("subtitle_bn", "").splitlines() if line.strip()]
     en = [line.strip() for line in bundle.get("subtitle_en", "").splitlines() if line.strip()]
     recap = [line.strip() for line in bundle.get("recap_bn", "").splitlines() if line.strip()]
-    # Auto mode consumes the approved narration timeline. If the model returned
-    # one long paragraph, split it into compact caption units before distributing
-    # them over the exact fitted voice duration.
     lines = bn or recap or ["AungMin Movie Recap"]
-    normalized: list[str] = []
-    for line in lines:
+    units: list[str] = []
+    for index, line in enumerate(lines):
         clean = " ".join(str(line).split())
-        if len(clean) <= 42:
-            normalized.append(clean)
-        else:
-            normalized.extend([part.replace("\n", " ").strip() for part in _wrap_caption(clean, 22).splitlines() if part.strip()])
-    lines = normalized or ["AungMin Movie Recap"]
+        wrapped_lines = wrap_caption(clean, max_chars).splitlines() or [clean]
+        english = en[index] if index < len(en) and mode == "Burmese + English" else ""
+        if mode == "English only":
+            wrapped_lines = wrap_caption(english or clean, max_chars).splitlines() or [english or clean]
+        units.extend(line.strip() for line in wrapped_lines if line.strip())
+        if english and mode == "Burmese + English":
+            units.extend(line.strip() for line in wrap_caption(english, max_chars).splitlines() if line.strip())
+    return units or ["AungMin Movie Recap"]
+
+
+def caption_for_time(bundle: dict, timestamp: float, duration: float, mode: str = "Burmese + English", max_chars: int = 22) -> str:
+    units = caption_units(bundle, mode, max_chars)
+    position = max(0.0, min(0.999999, float(timestamp or 0.0) / max(1.0, float(duration or 1.0))))
+    return units[min(len(units) - 1, int(position * len(units)))]
+
+
+def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode: str = "Burmese + English", max_chars: int = 22) -> None:
+    lines = caption_units(bundle, mode, max_chars)
     duration = max(1.0, float(duration or len(lines) * 4))
     raw_segments = bundle.get("segments")
     timed_segments = []
@@ -70,12 +80,7 @@ def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode
             for index, line in enumerate(lines, 1)
         ]
         for index, (start, end, line) in enumerate(entries, 1):
-            english = en[index - 1] if index - 1 < len(en) else ""
-            if mode == "Burmese only":
-                english = ""
-            if mode == "English only":
-                line = english or line
-            caption = _wrap_caption(line[:220]) + (f"\n{_wrap_caption(english[:220])}" if english and mode == "Burmese + English" else "")
+            caption = line[:440]
             handle.write(f"{index}\n{stamp(start)} --> {stamp(end)}\n{caption}\n\n")
 
 

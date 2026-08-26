@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from .config import EditorState
+from .audio import wrap_caption
 
 
 def extract_preview_frame(media_path: str, width: int = 720, height: int = 405, timestamp: float = 0.0):
@@ -65,22 +66,7 @@ def add_preview_subtitle(frame, subtitle: str, font_path: str | None, size: int,
 
 
 def _compact_canvas_text(text: str, max_chars: int) -> str:
-    compact = " ".join(str(text or "").replace("\n", " ").split())
-    if len(compact) <= max_chars:
-        return compact
-    chunks = compact.split(" ") if " " in compact else list(compact)
-    lines: list[str] = []
-    current = ""
-    for chunk in chunks:
-        candidate = f"{current} {chunk}".strip() if " " in compact else current + chunk
-        if current and len(candidate) > max_chars:
-            lines.append(current.strip())
-            current = chunk
-        else:
-            current = candidate
-    if current:
-        lines.append(current.strip())
-    return "\n".join(lines[:3])
+    return wrap_caption(text, max_chars)
 
 
 def canvas_initial_drawing(state: EditorState, width: int, height: int, subtitle: str = "", font_family: str = "sans-serif", logo_path: str | None = None) -> dict:

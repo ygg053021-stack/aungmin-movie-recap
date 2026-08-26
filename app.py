@@ -13,6 +13,7 @@ from streamlit_app import (
     probe_duration, render_mp4, render_bundle_to_mp4, render_voice_preview, save_uploaded_file, duration_notice,
     validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
 )
+from streamlit_app.audio import caption_for_time
 from streamlit_app.editor import add_preview_subtitle, extract_preview_frame, sync_blur_from_canvas, sync_overlays_from_canvas, canvas_initial_drawing
 
 st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="collapsed")
@@ -295,9 +296,14 @@ with right:
                 ratio = RATIOS[output_platform]
                 canvas_width, canvas_height = ((405, 720) if ratio == "9:16" else (720, 405) if ratio == "16:9" else (540, 540))
                 frame = extract_preview_frame(st.session_state.media_path, width=canvas_width, height=canvas_height, timestamp=preview_time)
-                preview_text = st.session_state.get("manual_subtitle", "").strip() or (st.session_state.bundle or {}).get("subtitle_bn", "")
+                preview_bundle = dict(st.session_state.bundle or {})
+                manual_text = st.session_state.get("manual_subtitle", "").strip()
+                if manual_text:
+                    preview_bundle["subtitle_bn"] = manual_text
+                max_preview_chars = 22 if ratio == "9:16" else 34 if ratio == "16:9" else 28
+                preview_text = caption_for_time(preview_bundle, preview_time, source_duration, editor.subtitle_mode, max_preview_chars) if preview_bundle else ""
                 logo_path = st.session_state.get("logo_path")
-                canvas_key = f"finish_overlay_canvas_{ratio}_{canvas_width}x{canvas_height}_{round(preview_time, 1)}_{editor.subtitle_font}_{editor.subtitle_size}_{editor.subtitle_fill}_{editor.subtitle_design}_{editor.subtitle_enabled}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_enabled}_{editor.blur_strength}"
+                canvas_key = f"finish_overlay_canvas_{ratio}_{canvas_width}x{canvas_height}_{round(preview_time, 1)}_{editor.subtitle_font}_{editor.subtitle_size}_{editor.subtitle_fill}_{editor.subtitle_design}_{editor.subtitle_enabled}_{editor.subtitle_x}_{editor.subtitle_y}_{editor.subtitle_w}_{editor.subtitle_h}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_enabled}_{editor.blur_strength}_{editor.blur_x}_{editor.blur_y}_{editor.blur_w}_{editor.blur_h}"
                 canvas_kwargs = dict(
                     fill_color="rgba(0, 0, 0, 0.58)", stroke_width=3, stroke_color="#70e8d8",
                     background_image=frame, update_streamlit=True, height=canvas_height, width=canvas_width,
@@ -351,7 +357,8 @@ with right:
                             manual_text = st.session_state.get("manual_subtitle", "").strip()
                             if manual_text:
                                 render_bundle["subtitle_bn"] = manual_text
-                            make_srt(render_bundle, subtitle_duration, srt_path, editor.subtitle_offset, editor.subtitle_mode)
+                            subtitle_max_chars = 22 if RATIOS[output_platform] == "9:16" else 34 if RATIOS[output_platform] == "16:9" else 28
+                            make_srt(render_bundle, subtitle_duration, srt_path, editor.subtitle_offset, editor.subtitle_mode, max_chars=subtitle_max_chars)
                             render_mp4(st.session_state.media_path, srt_path, voice_path, output_path, editor, RATIOS[output_platform], music_path, logo_path=st.session_state.get("logo_path"))
                             output_file = Path(output_path)
                             if not output_file.is_file() or output_file.stat().st_size < 1024:

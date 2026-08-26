@@ -449,3 +449,14 @@
 - [x] Push the verified finish-editor correction to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user requested complete original-subtitle removal, exact 9:16/16:9 preview sizing, readable fonts, and preservation of the stable render workflow.
+
+# Preview and export subtitle parity — completed
+
+- [x] Trace why preview Burmese text appears correct while exported MP4 text differs
+- [x] Use one normalized subtitle geometry model for the floating preview and FFmpeg export
+- [x] Preserve exact selected blur coordinates and account for portrait crop offsets in final render
+- [x] Keep Burmese subtitle text, line wrapping, font, size, and position identical across both paths
+- [x] Run real 9:16 and 16:9 preview/export comparison tests
+- [x] Push the verified parity fix to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user reported preview text is correct but exported text and blur placement still differ.
