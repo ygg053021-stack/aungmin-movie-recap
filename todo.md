@@ -355,6 +355,6 @@
 - [x] Show uploaded logo and watermark directly over the video preview with draggable position and size controls
 - [x] Ensure the exact preview state is used by the final MP4 render
 - [x] Run live-preview, font, coordinate, subtitle, logo, watermark, and MP4 regression tests
-- [ ] Push the verified live preview and font correction to GitHub main
+- [x] Push the verified live preview and font correction to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user reported unreadable Burmese glyphs and requested immediate video-overlay previews for all finish controls.
