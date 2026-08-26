@@ -302,7 +302,7 @@
 - [x] Make Burmese UI/widget and rendered subtitle fonts reliably readable on Streamlit Cloud without circle/box glyphs
 - [x] Add a real preview drag interaction that updates blur X/Y and clearly shows where the blur region moved from/to
 - [x] Run quota fallback, font rendering, drag interaction, subtitle, and real MP4 regression tests
-- [ ] Push the verified live recovery changes to GitHub main
+- [x] Push the verified live recovery changes to GitHub main
 
 ရက်စွဲ: 2026-08-26 — live screenshots reported `gemini-2.5-flash` 404, `gemini-3.7-flash` 429 quota exceeded, unreadable Burmese glyphs, and slider-only blur controls.
 
