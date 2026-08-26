@@ -7,9 +7,9 @@ import streamlit.components.v1 as components
 from streamlit_app import (
     APP_NAME, EditorState, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
     create_voiceover, download_authorized_source, embed_preview_html,
-    generate_recap_bundle, inspect_source, make_srt, preview_html,
+    generate_recap_bundle, generate_recap_from_transcript, inspect_source, make_srt, preview_html,
     probe_duration, render_mp4, save_uploaded_file, duration_notice,
-    validate_media_file, MAX_DURATION_SECONDS,
+    validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
 )
 
 st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="collapsed")
@@ -44,6 +44,7 @@ if "source" not in st.session_state: st.session_state.source = None
 if "media_path" not in st.session_state: st.session_state.media_path = None
 if "api_key" not in st.session_state: st.session_state.api_key = ""
 if "bundle" not in st.session_state: st.session_state.bundle = None
+if "transcript" not in st.session_state: st.session_state.transcript = None
 if "final_video" not in st.session_state: st.session_state.final_video = None
 if "editor" not in st.session_state: st.session_state.editor = EditorState()
 editor = st.session_state.editor
@@ -94,6 +95,7 @@ with right:
         st.session_state.api_key = st.text_input("Google AI Studio API key", type="password", key="api_key_input", help="Session-only key. Never commit it to GitHub.")
         if st.button("Load original video", type="primary", use_container_width=True):
             try:
+                st.session_state.transcript = None
                 if mode == "Upload video":
                     if not uploaded: raise ValueError("Choose a video file first.")
                     candidate = save_uploaded_file(uploaded, "aungmin-uploaded-source")
@@ -114,7 +116,14 @@ with right:
                         st.info(duration_notice(duration))
                     except ValueError as exc:
                         st.session_state.media_path = None
-                        st.warning(f"Link preview ရနိုင်သော်လည်း download မရပါ: {exc}")
+                        st.warning(f"Link preview ရနိုင်သော်လည်း video download မရပါ: {exc}")
+                        if source.platform == "YouTube":
+                            try:
+                                with st.spinner("Public YouTube transcript ကို ရှာနေပါတယ်…"):
+                                    st.session_state.transcript = fetch_public_transcript(source.url)
+                                st.success("Public transcript ရပါပြီ။ Video file မ download လုပ်ဘဲ Quick Recap စနိုင်ပါပြီ။")
+                            except ValueError as transcript_exc:
+                                st.info(str(transcript_exc))
                 st.session_state.final_video = None
                 st.session_state.bundle = None
                 if st.session_state.media_path:
@@ -126,16 +135,21 @@ with right:
     with tabs[1]:
         style = st.selectbox("Recap narration style / ဇာတ်ကြောင်းပြောဟန်", ["ရုပ်ရှင်ဆန်သော ဇာတ်ကြောင်းပြောဟန်", "စိတ်လှုပ်ရှားဖွယ် ဇာတ်ကြောင်းပြောဟန်", "တည်ငြိမ်ပြီး ရှင်းလင်းသောဟန်", "လျှို့ဝှက်ဆန်းကြယ်သောဟန်", "ဝမ်းနည်းနက်ရှိုင်းသောဟန်"], index=0, key="recap_style")
         detail = "Essential"
-        st.markdown('<div class="section-note">Quick Recap သည် အဓိကမြင်ကွင်းများကိုသာ အမြန်ရွေးချယ်ပြီး မြန်မာဇာတ်ကြောင်း၊ မြန်မာအသံနှင့် မြန်မာစာတန်းထိုးအတွက် ပြင်ဆင်မည်။</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-note">Quick Recap သည် video file ရှိလျှင် visuals/audio ကို အသုံးပြုမည်။ YouTube download မရလျှင် public transcript ကို အသုံးပြုပြီး မြန်မာဇာတ်ကြောင်း၊ မြန်မာအသံနှင့် မြန်မာစာတန်းထိုးအတွက် ပြင်ဆင်မည်။</div>', unsafe_allow_html=True)
+        if st.session_state.transcript:
+            st.info("YouTube public transcript ready — video download မလိုဘဲ recap script ထုတ်နိုင်ပါပြီ။ Final MP4 အတွက်တော့ authorized video file upload လိုပါမယ်။")
         if st.button("Quick Recap စတင်မယ်", type="primary", use_container_width=True):
-            if not st.session_state.media_path or not st.session_state.source:
-                st.error("Load the original video first. API key is used only when generating the recap.")
+            if not st.session_state.source or (not st.session_state.media_path and not st.session_state.transcript):
+                st.error("Load a video file or a YouTube link with public captions first.")
             elif not st.session_state.api_key:
                 st.error("Enter your Google AI Studio API key in 01 · Source before generating.")
             else:
                 with st.spinner("Analyzing video visuals/audio and writing Burmese recap…"):
                     try:
-                        st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip)
+                        if st.session_state.media_path:
+                            st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip)
+                        else:
+                            st.session_state.bundle = generate_recap_from_transcript(st.session_state.api_key, st.session_state.transcript, style, detail)
                         st.success("မြန်မာ recap၊ မြန်မာ voice နှင့် မြန်မာ subtitle အတွက် ပြင်ဆင်ပြီးပါပြီ။")
                     except (ValueError, ImportError) as exc:
                         st.error(str(exc))
@@ -163,7 +177,7 @@ with right:
             if not st.session_state.bundle:
                 st.error("Generate and review the Burmese recap first.")
             elif not st.session_state.media_path:
-                st.error("Load the original video first.")
+                st.error("Transcript recap script ရပါပြီ။ Final MP4 render အတွက် authorized video file ကို upload လုပ်ပါ။")
             else:
                 with st.spinner("Rendering voiceover, bilingual subtitles, effects, and MP4 preview…"):
                     try:

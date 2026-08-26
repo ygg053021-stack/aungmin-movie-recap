@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from streamlit_app import SourceInfo, embed_preview_html, inspect_source
 from streamlit_app.media import download_authorized_source
+from streamlit_app.transcript import fetch_public_transcript, youtube_video_id
 
 
 class StreamlitLinkTests(unittest.TestCase):
@@ -17,6 +18,26 @@ class StreamlitLinkTests(unittest.TestCase):
     def test_non_youtube_provider_has_no_embed(self):
         source = SourceInfo("https://www.tiktok.com/@demo/video/1", "TikTok", "www.tiktok.com", "demo")
         self.assertIsNone(embed_preview_html(source))
+
+    def test_youtube_video_id_supports_shorts_and_watch_links(self):
+        self.assertEqual(youtube_video_id("https://youtube.com/shorts/pDDohu7oMPU?si=test"), "pDDohu7oMPU")
+        self.assertEqual(youtube_video_id("https://www.youtube.com/watch?v=pDDohu7oMPU"), "pDDohu7oMPU")
+
+    def test_public_transcript_uses_caption_text_without_video_download(self):
+        class Snippet:
+            def __init__(self, text):
+                self.text = text
+
+        class FakeTranscriptApi:
+            def fetch(self, video_id, languages):
+                self.video_id = video_id
+                self.languages = languages
+                return [Snippet("David can teleport."), Snippet("He discovers his power.")]
+
+        fake_module = types.SimpleNamespace(YouTubeTranscriptApi=lambda: FakeTranscriptApi())
+        with patch.dict(sys.modules, {"youtube_transcript_api": fake_module}):
+            text = fetch_public_transcript("https://youtube.com/shorts/pDDohu7oMPU")
+        self.assertEqual(text, "David can teleport.\nHe discovers his power.")
 
     def test_download_failure_is_reported_as_fallback_error(self):
         class FailingDownloader:

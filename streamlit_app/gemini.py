@@ -104,3 +104,52 @@ JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ M
         "subtitle_bn": str(bundle.get("subtitle_bn", recap)).strip(),
         "subtitle_en": str(bundle.get("subtitle_en", "")).strip(),
     }
+
+
+def generate_recap_from_transcript(api_key: str, transcript: str, style: str, detail: str) -> dict:
+    if not api_key.strip():
+        raise ValueError("Enter your Google AI Studio API key before generating a recap.")
+    if not transcript.strip():
+        raise ValueError("No public transcript was found for this link.")
+    prompt = f"""အောက်ပါ YouTube transcript ကို အခြေခံပြီး မြန်မာ movie recap narrator စာမူရေးပါ။ မူရင်း transcript ထဲမပါတဲ့အချက် မထည့်ပါနှင့်။ Output ကို မြန်မာစာဖြင့်သာရေးပါ။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ်သုံးပါ။ Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
+
+JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ Markdown မသုံးပါနှင့်။ JSON key နှစ်ခုကို တိတိကျကျသုံးပါ:
+{{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မြန်မာစာတန်းထိုးရန် စာမူ"}}
+
+TRANSCRIPT:
+{transcript[:50000]}
+"""
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.15, "maxOutputTokens": 4500},
+    }
+    request = Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"x-goog-api-key": api_key.strip(), "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=150) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:700]
+        raise ValueError(f"Gemini transcript recap failed ({exc.code}). {detail}") from exc
+    except URLError as exc:
+        raise ValueError("Gemini could not be reached while creating the transcript recap.") from exc
+    text = extract_gemini_text(data)
+    if not text:
+        raise ValueError("Gemini returned no recap for this transcript.")
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE | re.DOTALL)
+    try:
+        bundle = json.loads(cleaned)
+    except json.JSONDecodeError:
+        bundle = {"recap_bn": text, "subtitle_bn": text, "subtitle_en": ""}
+    recap = str(bundle.get("recap_bn", "")).strip()
+    if not recap:
+        raise ValueError("Gemini returned an empty transcript recap.")
+    return {
+        "recap_bn": recap,
+        "subtitle_bn": str(bundle.get("subtitle_bn", recap)).strip(),
+        "subtitle_en": str(bundle.get("subtitle_en", "")).strip(),
+    }
