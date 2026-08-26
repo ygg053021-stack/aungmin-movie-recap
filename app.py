@@ -94,8 +94,9 @@ with right:
         source_url = st.text_input("Video link", placeholder="YouTube · TikTok · Bilibili · RedNote · public URL", key="source_url") if mode == "Paste video link" else ""
         quality = st.selectbox("Download quality / အရည်အသွေး", ["MP4 720p", "MP4 480p", "MP4 360p"], index=0, key="download_quality") if mode == "Paste video link" else "MP4 720p"
         st.caption("Public/authorized media only. Link loading depends on provider access rules. Video limit: 5 minutes. Quality options depend on provider availability.")
+        st.markdown('<div style="margin:.55rem 0 .35rem;padding:.7rem .8rem;border:1px solid rgba(112,232,216,.3);border-radius:12px;background:rgba(112,232,216,.08)"><b style="color:#75eadb">Gemini API key လိုပါသလား?</b><br><span style="color:#b9c4d8;font-size:.78rem">Google AI Studio မှာ key ယူပြီး ဒီအောက်က box ထဲ session-only ထည့်ပါ။</span><br><a href="https://aistudio.google.com/app/apikey" target="_blank" style="display:inline-block;margin-top:.45rem;color:#07101b;background:#75eadb;padding:.42rem .7rem;border-radius:8px;text-decoration:none;font-weight:800;font-size:.78rem">API key ရယူရန် → Google AI Studio</a></div>', unsafe_allow_html=True)
         st.session_state.api_key = st.text_input("Google AI Studio API key", type="password", key="api_key_input", help="Session-only key. Never commit it to GitHub.")
-        if st.button("Load original video", type="primary", use_container_width=True):
+        if st.button("စတင်ရန် · Load original video", type="primary", use_container_width=True):
             try:
                 st.session_state.transcript = None
                 if mode == "Upload video":

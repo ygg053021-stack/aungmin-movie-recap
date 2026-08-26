@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 APP_NAME = "AungMin Movie Recap"
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-3.7-flash"
 MAX_DURATION_SECONDS = 5 * 60
 MAX_UPLOAD_MB = 200
 PLATFORMS = ("YouTube", "TikTok", "Bilibili", "RedNote", "Facebook", "Generic")
