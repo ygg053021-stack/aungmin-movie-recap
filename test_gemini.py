@@ -36,7 +36,7 @@ class FakeClient:
 
         def create(self, model, input, generation_config):
             self.calls.append(model)
-            if model == "gemini-2.5-flash":
+            if model == "gemini-3.6-flash":
                 raise RuntimeError("503 UNAVAILABLE: model is experiencing high demand")
             return FakeResponse()
 
@@ -66,10 +66,25 @@ class GeminiRecoveryTests(unittest.TestCase):
                 ),
                 "video analysis",
             )
-        self.assertEqual(model, gemini.MODEL_NAME)
+        self.assertEqual(model, "gemini-3.5-flash-lite")
         self.assertEqual(response.output_text, FakeResponse.output_text)
-        self.assertEqual(client.interactions.calls, ["gemini-2.5-flash"] * 3 + [gemini.MODEL_NAME])
+        self.assertEqual(client.interactions.calls, ["gemini-3.6-flash"] * 3 + ["gemini-3.5-flash-lite"])
         self.assertEqual(sleep.call_count, 2)
+
+    def test_quota_error_skips_retries_and_uses_next_model(self):
+        client = FakeClient()
+        calls = []
+        def quota_then_success(current, selected):
+            calls.append(selected)
+            if selected == "gemini-3.6-flash":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED: You exceeded your current quota")
+            return FakeResponse()
+        with patch.object(gemini, "_get_client", return_value=client), patch.object(gemini.time, "sleep") as sleep:
+            response, model = gemini._retry_model_operation("test-key", quota_then_success, "video analysis")
+        self.assertEqual(model, "gemini-3.5-flash-lite")
+        self.assertEqual(calls, ["gemini-3.6-flash", "gemini-3.5-flash-lite"])
+        sleep.assert_not_called()
+        self.assertEqual(response.output_text, FakeResponse.output_text)
 
     def test_bundle_parser_accepts_sdk_output_text(self):
         bundle = gemini._parse_bundle(FakeResponse.output_text)
@@ -82,7 +97,7 @@ class GeminiRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "503 retry နှင့် fallback model"):
                 original = gemini.MODEL_CANDIDATES
                 try:
-                    gemini.MODEL_CANDIDATES = ("gemini-2.5-flash", "gemini-2.5-flash")
+                    gemini.MODEL_CANDIDATES = ("gemini-3.6-flash", "gemini-3.6-flash")
                     gemini._retry_model_operation(
                         "test-key",
                         lambda current, selected: current.interactions.create(model=selected, input="test", generation_config={}),

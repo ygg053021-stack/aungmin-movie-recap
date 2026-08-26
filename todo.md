@@ -291,6 +291,29 @@
 - [x] Match reference-style Burmese narration pacing, pauses, and sentence-break timing as closely as the selected voice engine allows
 - [x] Add reference-style logo overlay motion/placement controls and preserve existing AungMin design
 - [x] Run reference comparison, font rendering, subtitle, audio, and final MP4 regression tests
-- [ ] Push the verified reference-matching changes to GitHub main
+- [x] Push the verified reference-matching changes to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user supplied two reference videos and requested matching output behavior.
+
+# Live quota, font, and draggable blur recovery — pending
+
+- [x] Replace unavailable `gemini-2.5-flash` fallback with models valid for current API users, including `gemini-3.6-flash`, and make 429 handling quota-aware without repeating the same long error
+- [x] Reduce recap latency by avoiding unnecessary retries/preprocessing and show concise elapsed-stage progress
+- [x] Make Burmese UI/widget and rendered subtitle fonts reliably readable on Streamlit Cloud without circle/box glyphs
+- [x] Add a real preview drag interaction that updates blur X/Y and clearly shows where the blur region moved from/to
+- [x] Run quota fallback, font rendering, drag interaction, subtitle, and real MP4 regression tests
+- [ ] Push the verified live recovery changes to GitHub main
+
+ရက်စွဲ: 2026-08-26 — live screenshots reported `gemini-2.5-flash` 404, `gemini-3.7-flash` 429 quota exceeded, unreadable Burmese glyphs, and slider-only blur controls.
+
+# Supplied TTF and direct-manipulation editor — pending
+
+- [x] Copy and validate the supplied Burmese TTF files, preserving Unicode-safe fonts and readable labels
+- [x] Replace the generic font list with the user-supplied TTF presets and use the selected file in FFmpeg subtitles
+- [x] Add video preview overlay with pointer drag and visible current X/Y/width/height values
+- [x] Add automatic subtitle/blur mode with a manual fallback that writes the exact preview position and size into the render state
+- [x] Add manual Burmese subtitle text/size/position preview over the blur region
+- [x] Test supplied fonts, drag state, subtitle rendering, and final MP4 output
+- [x] Push the supplied-font and direct-editor changes to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user supplied 11 TTF files and requested direct video-overlay blur/subtitle editing.

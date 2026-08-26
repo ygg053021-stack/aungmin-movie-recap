@@ -10,18 +10,33 @@ RATIOS = {"YouTube": "16:9", "TikTok": "9:16", "Bilibili": "16:9", "RedNote": "9
 VOICE_NAMES = ("my-MM-NilarNeural", "my-MM-ThihaNeural", "en-US-AriaNeural")
 # These are real Unicode font families installed by packages.txt. Avoid Zawgyi,
 # which produces rounded/missing glyphs when the text is Burmese Unicode.
-FONT_PRESETS = (
-    "Noto Sans Myanmar",
-    "Noto Sans Myanmar SemiBold",
-    "Noto Sans Myanmar Medium",
-    "Noto Sans Myanmar Cond",
-    "Noto Sans Myanmar SemCond",
-    "Noto Sans Myanmar ExtCond",
-    "Noto Sans Myanmar Light",
-    "Noto Sans Myanmar Thin",
-    "Noto Serif Myanmar",
-    "Padauk",
-)
+FONT_FILES = {
+    "OT43 YellYint Regular (1)": "OT43_YellYint-Regular.ttf",
+    "OT43 YellYint Regular": "OT43_YellYint-Regular.ttf",
+    "OT43 YellYint Thin": "OT43_YellYint-Thin.ttf",
+    "Pyidaungsu Book Bold": "Pyidaungsu-Book-Bold.ttf",
+    "Pyidaungsu Book Regular": "Pyidaungsu-Book-Regular.ttf",
+    "SM01 WaTokeLay": "SM01_WaTokeLay-Regular.ttf",
+    "SM02 KanBaung Regular (4)": "SM02_KanBaung-Regular.ttf",
+    "SM02 KanBaung Regular": "SM02_KanBaung-Regular.ttf",
+    "SM09 BeeZee": "SM09_BeeZee-Regular.ttf",
+    "Thingaha 004": "Thingaha-004-Regular.ttf",
+    "Z10 Cartoon": "Z10-Cartoon.ttf",
+}
+FONT_FAMILIES = {
+    "OT43 YellYint Regular (1)": "OT43_YellYint",
+    "OT43 YellYint Regular": "OT43_YellYint",
+    "OT43 YellYint Thin": "OT43_YellYint",
+    "Pyidaungsu Book Bold": "Pyidaungsu Book",
+    "Pyidaungsu Book Regular": "Pyidaungsu Book",
+    "SM01 WaTokeLay": "SM01_WaTokeLay",
+    "SM02 KanBaung Regular (4)": "SM02_KanBaung",
+    "SM02 KanBaung Regular": "SM02_KanBaung",
+    "SM09 BeeZee": "SM09_BeeZee",
+    "Thingaha 004": "Thingaha_004",
+    "Z10 Cartoon": "Z10-Cartoon",
+}
+FONT_PRESETS = tuple(FONT_FILES)
 SUPPORTED_DOMAINS = {
     "YouTube": ("youtube.com", "youtu.be"),
     "TikTok": ("tiktok.com",),
@@ -50,7 +65,7 @@ class EditorState:
     subtitle_position: str = "Bottom"
     subtitle_mode: str = "Burmese only"
     subtitle_size: int = 52
-    subtitle_font: str = "Noto Sans Myanmar SemiBold"
+    subtitle_font: str = "Pyidaungsu Book Regular"
     subtitle_offset: float = 0.0
     logo_position: str = "Top Right"
     logo_motion: str = "Slow drift"

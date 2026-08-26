@@ -1,4 +1,5 @@
 from pathlib import Path
+import base64
 import tempfile
 import time
 
@@ -6,12 +7,13 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from streamlit_app import (
-    APP_NAME, EditorState, FONT_PRESETS, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
+    APP_NAME, EditorState, FONT_FAMILIES, FONT_FILES, FONT_PRESETS, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
     create_voiceover, download_authorized_source, embed_preview_html,
     generate_recap_bundle, generate_recap_from_transcript, inspect_source, make_srt, preview_html,
     probe_duration, render_mp4, render_bundle_to_mp4, save_uploaded_file, duration_notice,
     validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
 )
+from streamlit_app.editor import add_preview_subtitle, extract_preview_frame, sync_blur_from_canvas, canvas_initial_drawing
 
 st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""
@@ -40,6 +42,13 @@ div[data-testid="stButton"]>button[kind="primary"],button[kind="primaryFormSubmi
 @media(max-width:900px){.block-container{overflow:visible}.panel{padding:.8rem}.brandbar small{font-size:.56rem}.stage{height:260px}.empty-preview{height:260px}}
 </style>
 """, unsafe_allow_html=True)
+
+# Streamlit widgets use the browser's font by default. Embed a known Unicode
+# Burmese font so labels and controls do not fall back to broken glyphs.
+_ui_font = Path(__file__).resolve().parent / "fonts" / "Pyidaungsu-Book-Regular.ttf"
+if _ui_font.is_file():
+    _ui_font_b64 = base64.b64encode(_ui_font.read_bytes()).decode("ascii")
+    st.markdown(f"<style>@font-face{{font-family:'AungMinMyanmar';src:url(data:font/ttf;base64,{_ui_font_b64}) format('truetype');font-weight:400;font-style:normal}}body,[data-testid='stAppViewContainer'],button,input,textarea,[role='option'],label,p,small,div{{font-family:'AungMinMyanmar','Pyidaungsu Book',sans-serif!important}}</style>", unsafe_allow_html=True)
 
 if "source" not in st.session_state: st.session_state.source = None
 if "media_path" not in st.session_state: st.session_state.media_path = None
@@ -147,6 +156,8 @@ with right:
             st.session_state.logo_path = None
         editor.logo_position = st.selectbox("Logo position / လိုဂိုနေရာ", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"], index=0, key="logo_position")
         editor.logo_motion = st.selectbox("Logo motion / လိုဂိုလှုပ်ရှားပုံ", ["Static", "Slow drift"], index=1, key="logo_motion")
+        manual_subtitle = st.text_area("Manual Burmese subtitle / ကိုယ်တိုင်ထည့်မည့် စာတန်း", value=st.session_state.get("manual_subtitle", ""), height=90, key="manual_subtitle")
+        st.caption("စာတန်းကို auto မရလျှင် ဒီနေရာမှာ ပြင်ရေးနိုင်ပါသည်။ Final render မှာ ရွေးထားသော font/size/နေရာနဲ့ ထည့်ပေးမည်။")
         st.caption("Unicode font များကိုသာ အသုံးပြုထားသောကြောင့် မြန်မာစာလုံးများ အဝိုင်း/လေးထောင့်ဖြစ်ခြင်းကို လျှော့ချပေးပါသည်။")
         st.markdown('<div class="section-note">Quick Recap သည် video file ရှိလျှင် visuals/audio ကို အသုံးပြုမည်။ YouTube download မရလျှင် public transcript ကို အသုံးပြုပြီး မြန်မာဇာတ်ကြောင်း၊ မြန်မာအသံနှင့် မြန်မာစာတန်းထိုးအတွက် ပြင်ဆင်မည်။</div>', unsafe_allow_html=True)
         if st.session_state.transcript:
@@ -171,7 +182,11 @@ with right:
 
                     selected_voice = st.session_state.get("voice_name", "my-MM-ThihaNeural")
                     selected_platform = st.session_state.get("output_platform", "YouTube")
-                    final_bytes = render_bundle_to_mp4(st.session_state.media_path, st.session_state.bundle, selected_voice, editor, selected_platform, update_progress, st.session_state.get("logo_path"))
+                    render_bundle = dict(st.session_state.bundle)
+                    manual_text = st.session_state.get("manual_subtitle", "").strip()
+                    if manual_text:
+                        render_bundle["subtitle_bn"] = manual_text
+                    final_bytes = render_bundle_to_mp4(st.session_state.media_path, render_bundle, selected_voice, editor, selected_platform, update_progress, st.session_state.get("logo_path"))
                     if not final_bytes:
                         raise ValueError("Final MP4 data မရပါ။")
                     st.session_state.final_video = final_bytes
@@ -198,8 +213,11 @@ with right:
         editor.speed = 1.0
         editor.flip = False
         blur_enabled = st.checkbox("Chinese စာတန်းနေရာကို Blur ထည့်မယ်", value=editor.blur_strength > 0, key="blur_enabled")
+        blur_mode = st.selectbox("Blur mode / အုပ်မည့်နည်း", ["Auto default (အောက်ခြေစာတန်း)", "Manual drag (video ပေါ်ရွှေ့ရန်)"], index=0, key="blur_mode", disabled=not blur_enabled)
         editor.blur_strength = st.slider("Blur strength / အုပ်အား", 0, 60, 28, 2, disabled=not blur_enabled) if blur_enabled else 0
-        if blur_enabled:
+        if blur_enabled and blur_mode.startswith("Auto"):
+            editor.blur_x, editor.blur_y, editor.blur_w, editor.blur_h = 5, 72, 90, 18
+        if blur_enabled and blur_mode.startswith("Manual"):
             st.caption("Auto default က အောက်ခြေစာတန်းဧရိယာကို အုပ်ပါသည်။ မတူသောနေရာဖြစ်လျှင် x/y/width/height ကို manual ပြင်ပါ။")
             editor.blur_x = st.slider("Blur X %", 0, 90, editor.blur_x, 1)
             editor.blur_y = st.slider("Blur Y %", 0, 90, editor.blur_y, 1)
@@ -208,10 +226,32 @@ with right:
         editor.subtitle_mode = "Burmese only"
         editor.subtitle_position = st.selectbox("Subtitle position / စာတန်းနေရာ", ["Bottom", "Center", "Top"], index=0, key="subtitle_position")
         editor.subtitle_size = st.slider("Subtitle size / စာလုံးအရွယ်", 24, 84, 52, 2, key="subtitle_size")
-        editor.subtitle_font = st.session_state.get("subtitle_font", "Noto Sans Myanmar SemiBold")
+        editor.subtitle_font = st.session_state.get("subtitle_font", "Pyidaungsu Book Regular")
         editor.subtitle_offset = 0.0
+        if blur_enabled and blur_mode.startswith("Manual") and st.session_state.media_path:
+            st.markdown("**Blur / subtitle ကို video frame ပေါ်မှာ လက်နဲ့ရွှေ့ပါ**")
+            try:
+                from streamlit_drawable_canvas import st_canvas
+                frame = extract_preview_frame(st.session_state.media_path, width=720, height=405)
+                preview_text = st.session_state.get("manual_subtitle", "").strip() or (st.session_state.bundle or {}).get("subtitle_bn", "")
+                font_path = Path(__file__).resolve().parent / "fonts" / FONT_FILES.get(editor.subtitle_font, "Pyidaungsu-Book-Regular.ttf")
+                frame = add_preview_subtitle(frame, preview_text, str(font_path), editor.subtitle_size, editor.subtitle_position)
+                canvas_result = st_canvas(
+                    fill_color="rgba(0, 0, 0, 0.58)", stroke_width=3, stroke_color="#70e8d8",
+                    background_image=frame, update_streamlit=True, height=405, width=720,
+                    drawing_mode="transform", initial_drawing=canvas_initial_drawing(editor, 720, 405, "", FONT_FAMILIES.get(editor.subtitle_font, "Pyidaungsu Book")),
+                    display_toolbar=True, key="blur_subtitle_canvas",
+                )
+                editor, coords = sync_blur_from_canvas(editor, canvas_result.json_data, 720, 405)
+                if coords:
+                    st.caption(f"လက်ရှိ Blur region: X {coords[0]}% → Y {coords[1]}% · Width {coords[2]}% · Height {coords[3]}% — video frame ပေါ်မှာ ရွှေ့တာနဲ့ ချက်ချင်း update ဖြစ်သည်။")
+            except ImportError:
+                st.warning("Direct canvas editor မတက်သေးပါ။ sliders ဖြင့် manual ပြင်နိုင်ပါသည်။")
+            except Exception as exc:
+                st.warning(f"Preview editor မတက်နိုင်သေးပါ: {exc}")
         output_platform = st.selectbox("Output format", PLATFORMS, format_func=lambda item: f"{item} · {RATIOS[item]}", key="output_platform")
-        st.info("Final output: 1920×1080 · 30 FPS · မူရင်း video ကြာချိန်အတိုင်း။ Source က 720p/480p ဖြစ်လျှင် 1080p သို့ upscale လုပ်မည်၊ မူရင်း detail အသစ်ဖန်တီးမည်မဟုတ်ပါ။")
+        output_dimensions = {"16:9": "1920×1080", "9:16": "1080×1920", "1:1": "1080×1080", "3:4": "1080×1440"}.get(RATIOS[output_platform], "1920×1080")
+        st.info(f"Final output: {output_dimensions} · 30 FPS · မူရင်း video ကြာချိန်အတိုင်း။ Source က resolution နိမ့်လျှင် upscale လုပ်မည်၊ မူရင်း detail အသစ်ဖန်တီးမည်မဟုတ်ပါ။")
         music_path = None
         st.markdown('<div class="section-note">Blur ကို privacy/editing အတွက်သာ အသုံးပြုမည်။ Final video တွင် မြန်မာ voice narration နှင့် မြန်မာ subtitle တစ်မျိုးတည်း ပါမည်။</div>', unsafe_allow_html=True)
         if st.button("Render final recap video", type="primary", use_container_width=True):
@@ -231,7 +271,11 @@ with right:
                             create_voiceover(st.session_state.bundle["recap_bn"], voice_path, voice_name)
                             voice_duration = probe_duration(voice_path)
                             subtitle_duration = min(duration, voice_duration) if voice_duration > 0 else duration
-                            make_srt(st.session_state.bundle, subtitle_duration, srt_path, editor.subtitle_offset, editor.subtitle_mode)
+                            render_bundle = dict(st.session_state.bundle)
+                            manual_text = st.session_state.get("manual_subtitle", "").strip()
+                            if manual_text:
+                                render_bundle["subtitle_bn"] = manual_text
+                            make_srt(render_bundle, subtitle_duration, srt_path, editor.subtitle_offset, editor.subtitle_mode)
                             render_mp4(st.session_state.media_path, srt_path, voice_path, output_path, editor, RATIOS[output_platform], music_path, logo_path=st.session_state.get("logo_path"))
                             output_file = Path(output_path)
                             if not output_file.is_file() or output_file.stat().st_size < 1024:

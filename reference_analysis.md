@@ -17,3 +17,11 @@ The two files are not identical: one is a Burmese 9:16 finished-style reference,
 ## Accuracy boundary
 
 Visual placement, typography treatment, blur region, output ratio, logo behavior, and timing strategy can be implemented. Exact voice timbre and word-by-word timing cannot be guaranteed 100% with a free cloud TTS service; they depend on the selected Burmese voice and the generated script. The implementation must not claim that copyright is removed by blur/flip/speed edits; it should only provide user-controlled editing for media the user owns or is authorized to process.
+
+## Current Gemini model and quota findings (2026-08-26)
+
+Google's official Gemini model documentation lists `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, and `gemini-3.5-flash-lite` as current stable Gemini 3 endpoints. The official Gemini 3.6 Flash page states that it accepts text, image, video, audio, and PDF inputs and is optimized for speed and lower cost. The live screenshot's `gemini-2.5-flash` 404 therefore indicates that this particular API user/project cannot use that endpoint, even though the public catalog may still list it. Fallback should prioritize current Gemini 3 endpoints and should not retry a 404 model.
+
+Google's rate-limit documentation states that quotas are applied per project, not per API key, and that 429 `RESOURCE_EXHAUSTED` requires waiting/reducing request cost; rotating keys from the same project does not create unlimited quota. Therefore 429 quota errors should skip repeated long retries, move to a valid fallback model once, and show a concise quota message with the AI Studio rate-limit link.
+
+Sources: https://ai.google.dev/gemini-api/docs/models ; https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash ; https://ai.google.dev/gemini-api/docs/rate-limits

@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .config import EditorState, SourceInfo
+from .config import EditorState, FONT_FAMILIES, SourceInfo
 
 
 def _output_size(ratio: str) -> tuple[int, int]:
@@ -19,14 +19,16 @@ def _output_size(ratio: str) -> tuple[int, int]:
 
 def _subtitle_filter(srt_path: str, effects: EditorState) -> str:
     safe_path = srt_path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
-    font = (getattr(effects, "subtitle_font", "Noto Sans Myanmar SemiBold") or "Noto Sans Myanmar SemiBold").replace("'", "")
+    selected = getattr(effects, "subtitle_font", "Pyidaungsu Book Regular") or "Pyidaungsu Book Regular"
+    font = FONT_FAMILIES.get(selected, "Pyidaungsu Book").replace("'", "")
+    fonts_dir = (Path(__file__).resolve().parent.parent / "fonts").as_posix().replace("'", "\\'")
     size = max(24, min(96, int(getattr(effects, "subtitle_size", 52))))
     position = getattr(effects, "subtitle_position", "Bottom")
     alignment = {"Top": 8, "Center": 5, "Bottom": 2}.get(position, 2)
     margin = {"Top": 90, "Center": 0, "Bottom": 110}.get(position, 110)
     # ASS/SSA colours are AABBGGRR: this is opaque yellow with black outline.
     style = f"FontName={font},FontSize={size},PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=1,Alignment={alignment},MarginV={margin}"
-    return f"subtitles='{safe_path}':force_style='{style}'"
+    return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':force_style='{style}'"
 
 
 def _video_graph(source_path: str, srt_path: str, effects: EditorState, ratio: str, target_fps: int) -> str:
