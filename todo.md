@@ -269,6 +269,15 @@
 - [x] Fix Gemini 503 high-demand failures with retry/backoff and stable model fallback while preserving the AungMin UI
 - [x] Match the reference google-genai SDK request pattern for text analysis and keep errors actionable
 - [x] Re-run syntax, unit, Streamlit startup, and real MP4 regression tests after the 503 fix
-- [ ] Push the verified 503 fix to GitHub main
+- [x] Push the verified 503 fix to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user reported live `Gemini analysis failed (503)` high-demand error and requested immediate GitHub fix.
+
+# Gemini client lifecycle error — pending
+
+- [x] Keep one live google-genai Client through video upload, file polling, and analysis so Streamlit cannot close the client mid-request
+- [x] Add a regression test that fails if upload/analysis uses a temporary closed client
+- [x] Re-run syntax, unit, SDK import, Streamlit startup, and real MP4 regression tests
+- [ ] Push the verified client lifecycle fix to GitHub main
+
+ရက်စွဲ: 2026-08-26 — live app reported `Gemini video upload မအောင်မြင်ပါ: Cannot send a request, as the client has been closed.`

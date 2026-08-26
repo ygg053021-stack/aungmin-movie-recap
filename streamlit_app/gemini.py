@@ -90,17 +90,19 @@ def _retry_operation(operation: Callable[[], Any], label: str) -> Any:
     raise ValueError(f"Gemini {label} မအောင်မြင်ပါ{suffix}။ { _compact_error(last_error) }") from last_error
 
 
-def _retry_model_operation(api_key: str, operation: Callable[[Any, str], Any], label: str) -> tuple[Any, str]:
-    """Call one model with retries, then fail over to the next model."""
+def _retry_model_operation(api_key: str, operation: Callable[[Any, str], Any], label: str, client: Any | None = None) -> tuple[Any, str]:
+    """Call one model with retries, then fail over without closing the client."""
     failures: list[str] = []
+    active_client = client or _get_client(api_key)
     for model in MODEL_CANDIDATES:
-        client = _get_client(api_key)
         for attempt in range(MAX_RETRIES):
             try:
-                return operation(client, model), model
+                return operation(active_client, model), model
             except Exception as exc:
                 code = _error_code(exc)
                 failures.append(f"{model}{f'/{code}' if code else ''}: {_compact_error(exc)}")
+                if "client has been closed" in str(exc).lower():
+                    active_client = _get_client(api_key)
                 if not _is_retryable(exc) or attempt == MAX_RETRIES - 1:
                     break
                 time.sleep(_retry_delay(exc, attempt))
@@ -116,10 +118,14 @@ def _mime_for(path: str) -> str:
     return {".webm": "video/webm", ".mov": "video/quicktime", ".mkv": "video/x-matroska"}.get(Path(path).suffix.lower(), "video/mp4")
 
 
-def upload_to_gemini(api_key: str, media_path: str) -> Any:
+def upload_to_gemini(api_key: str, media_path: str, client: Any | None = None) -> Any:
     if not Path(media_path).is_file():
         raise ValueError("Gemini analysis အတွက် video file မတွေ့ပါ။")
-    uploaded = _retry_operation(lambda: _get_client(api_key).files.upload(file=str(media_path)), "video upload")
+    # Keep a strong reference to the client while the SDK request is in flight.
+    # A temporary `_get_client(...).files.upload(...)` expression can be
+    # garbage-collected by Streamlit between reruns and leaves httpx closed.
+    active_client = client or _get_client(api_key)
+    uploaded = _retry_operation(lambda: active_client.files.upload(file=str(media_path)), "video upload")
     if not getattr(uploaded, "uri", None):
         raise ValueError("Gemini video upload က file URI မပြန်ပါ။")
     return uploaded
@@ -131,9 +137,10 @@ def _state_name(file_obj: Any) -> str:
     return str(name or "").upper()
 
 
-def wait_for_file_active(api_key: str, uploaded: Any, progress: ProgressCallback | None = None, started: float | None = None) -> Any:
+def wait_for_file_active(api_key: str, uploaded: Any, progress: ProgressCallback | None = None, started: float | None = None, client: Any | None = None) -> Any:
     """Poll the uploaded Gemini file until the API marks it ACTIVE."""
     current = uploaded
+    active_client = client or _get_client(api_key)
     file_name = getattr(current, "name", None)
     if not file_name:
         return current
@@ -151,7 +158,7 @@ def wait_for_file_active(api_key: str, uploaded: Any, progress: ProgressCallback
         if progress:
             progress(22, f"Gemini video ကို ပြင်ဆင်နေသည် ({state or 'PROCESSING'})", begin)
         time.sleep(2)
-        current = _retry_operation(lambda: _get_client(api_key).files.get(name=file_name), "file status check")
+        current = _retry_operation(lambda: active_client.files.get(name=file_name), "file status check")
         if progress:
             progress(28, "Gemini video processing ပြီးရန် စောင့်နေသည်", begin)
 
@@ -198,12 +205,13 @@ def generate_recap_bundle(
     if progress:
         progress(8, "Video ကို analysis အတွက် ပြင်ဆင်နေသည်", started)
     quick_path = prepare_quick_media(media_path)
+    client = _get_client(api_key)
     if progress:
         progress(14, "Gemini ဆီ video တင်နေသည်", started)
-    uploaded = upload_to_gemini(api_key, quick_path)
+    uploaded = upload_to_gemini(api_key, quick_path, client)
     if progress:
         progress(20, "Gemini video file ကို စစ်နေသည်", started)
-    active_file = wait_for_file_active(api_key, uploaded, progress, started)
+    active_file = wait_for_file_active(api_key, uploaded, progress, started, client)
     duration = probe_duration(quick_path)
     target = "၅၀၀ မှ ၇၀၀" if duration else "တိုတောင်းပြီး အဓိကအချက်များပါဝင်သည့်"
     prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။
@@ -226,6 +234,7 @@ JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ M
             generation_config={"temperature": 0.15, "thinking_level": "low"},
         ),
         "video analysis",
+        client,
     )
     text = extract_gemini_text(response)
     bundle = _parse_bundle(text)

@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from streamlit_app import gemini
@@ -6,6 +8,25 @@ from streamlit_app import gemini
 
 class FakeResponse:
     output_text = '{"recap_bn":"စမ်းသပ် recap","subtitle_bn":"စမ်းသပ်စာတန်း"}'
+
+
+class FakeUpload:
+    uri = "https://generativelanguage.googleapis.com/v1beta/files/test"
+    name = "files/test"
+    mime_type = "video/mp4"
+    state = "ACTIVE"
+
+
+class FakeFiles:
+    def __init__(self):
+        self.upload_clients = []
+
+    def upload(self, file):
+        self.upload_clients.append(file)
+        return FakeUpload()
+
+    def get(self, name):
+        return FakeUpload()
 
 
 class FakeClient:
@@ -21,9 +42,18 @@ class FakeClient:
 
     def __init__(self):
         self.interactions = self.Interactions()
+        self.files = FakeFiles()
 
 
 class GeminiRecoveryTests(unittest.TestCase):
+    def test_upload_uses_the_explicit_live_client(self):
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as media:
+            client = FakeClient()
+            with patch.object(gemini, "_get_client", side_effect=AssertionError("temporary client must not be created")):
+                uploaded = gemini.upload_to_gemini("test-key", media.name, client)
+        self.assertEqual(uploaded.uri, FakeUpload.uri)
+        self.assertEqual(client.files.upload_clients, [media.name])
+
     def test_503_retries_then_falls_back_to_reference_model(self):
         client = FakeClient()
         with patch.object(gemini, "_get_client", return_value=client), patch.object(gemini.time, "sleep") as sleep:
