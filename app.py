@@ -115,7 +115,7 @@ with right:
                         validate_media_file(candidate, duration)
                         st.session_state.media_path = candidate
                         st.info(duration_notice(duration))
-                    except ValueError as exc:
+                    except (ValueError, TypeError) as exc:
                         st.session_state.media_path = None
                         st.warning(f"Link preview ရနိုင်သော်လည်း video download မရပါ: {exc}")
                         if source.platform == "YouTube":
