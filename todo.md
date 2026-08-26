@@ -381,3 +381,13 @@
 - [x] Push the verified fix to GitHub main
 
 ရက်စွဲ: 2026-08-26 — live screenshots reported `image_to_url` missing and FFmpeg `Filter not found`; user requested floating video/photo overlay editing.
+
+# Complete floating editor deployment — pending
+
+- [x] Include the full `streamlit_drawable_canvas/frontend/build` assets in the GitHub repository instead of only the Python wrapper
+- [x] Verify the live app can mount the floating photo editor without `No such component directory`
+- [x] Verify blur, subtitle, logo, and watermark object drag/resize changes appear immediately in the floating preview and sync to final render
+- [x] Run deployment-style import, component-directory, graph, and real MP4 tests
+- [x] Push the complete component fix to GitHub main
+
+ရက်စွဲ: 2026-08-26 — screen recording confirmed the requested floating-photo editing behavior; live app still reported missing component directory.
