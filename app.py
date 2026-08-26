@@ -1,5 +1,6 @@
-import tempfile
 from pathlib import Path
+import tempfile
+import time
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -8,7 +9,7 @@ from streamlit_app import (
     APP_NAME, EditorState, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
     create_voiceover, download_authorized_source, embed_preview_html,
     generate_recap_bundle, generate_recap_from_transcript, inspect_source, make_srt, preview_html,
-    probe_duration, render_mp4, save_uploaded_file, duration_notice,
+    probe_duration, render_mp4, render_bundle_to_mp4, save_uploaded_file, duration_notice,
     validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
 )
 
@@ -139,24 +140,45 @@ with right:
         st.markdown('<div class="section-note">Quick Recap သည် video file ရှိလျှင် visuals/audio ကို အသုံးပြုမည်။ YouTube download မရလျှင် public transcript ကို အသုံးပြုပြီး မြန်မာဇာတ်ကြောင်း၊ မြန်မာအသံနှင့် မြန်မာစာတန်းထိုးအတွက် ပြင်ဆင်မည်။</div>', unsafe_allow_html=True)
         if st.session_state.transcript:
             st.info("YouTube public transcript ready — video download မလိုဘဲ recap script ထုတ်နိုင်ပါပြီ။ Final MP4 အတွက်တော့ authorized video file upload လိုပါမယ်။")
-        if st.button("Quick Recap စတင်မယ်", type="primary", use_container_width=True):
-            if not st.session_state.source or (not st.session_state.media_path and not st.session_state.transcript):
-                st.error("Load a video file or a YouTube link with public captions first.")
+        if st.button("Quick Recap + MP4 တစ်ခါတည်း စတင်မယ်", type="primary", use_container_width=True):
+            if not st.session_state.media_path:
+                st.error("Final MP4 ထုတ်ရန် video file ကို အရင် upload လုပ်ပါ။ YouTube preview/transcript တစ်ခုတည်းနဲ့ MP4 မထုတ်နိုင်ပါ။")
             elif not st.session_state.api_key:
-                st.error("Enter your Google AI Studio API key in 01 · Source before generating.")
+                st.error("01 · Source ထဲမှာ Google AI Studio API key ထည့်ပြီးမှ စတင်ပါ။")
             else:
-                with st.spinner("Analyzing video visuals/audio and writing Burmese recap…"):
-                    try:
-                        if st.session_state.media_path:
-                            st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip)
-                        else:
-                            st.session_state.bundle = generate_recap_from_transcript(st.session_state.api_key, st.session_state.transcript, style, detail)
-                        st.success("မြန်မာ recap၊ မြန်မာ voice နှင့် မြန်မာ subtitle အတွက် ပြင်ဆင်ပြီးပါပြီ။")
-                    except (ValueError, ImportError) as exc:
-                        st.error(str(exc))
+                progress = st.progress(0, text="စတင်ရန် ပြင်ဆင်နေသည်…")
+                timing = st.empty()
+                started = time.monotonic()
+                try:
+                    progress.progress(8, text="Video ကို စစ်နေသည်…")
+                    timing.caption("ကြာချိန်: 0 စက္ကန့်")
+                    st.session_state.bundle = generate_recap_bundle(st.session_state.api_key, st.session_state.source, st.session_state.media_path, style, detail, editor.speed, editor.flip)
+                    progress.progress(42, text="မြန်မာ recap script ပြီးပါပြီ — voice/subtitle ပြင်ဆင်နေသည်…")
+                    timing.caption(f"ကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
+
+                    def update_progress(percent: int, message: str, pipeline_started: float) -> None:
+                        progress.progress(min(99, max(42, percent)), text=f"{message}…")
+                        timing.caption(f"ကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
+
+                    selected_voice = st.session_state.get("voice_name", "my-MM-NilarNeural")
+                    selected_platform = st.session_state.get("output_platform", "YouTube")
+                    final_bytes = render_bundle_to_mp4(st.session_state.media_path, st.session_state.bundle, selected_voice, editor, selected_platform, update_progress)
+                    if not final_bytes:
+                        raise ValueError("Final MP4 data မရပါ။")
+                    st.session_state.final_video = final_bytes
+                    progress.progress(100, text="Final MP4 အဆင်သင့်ဖြစ်ပါပြီ")
+                    timing.caption(f"စုစုပေါင်းကြာချိန်: {time.monotonic() - started:.0f} စက္ကန့်")
+                    st.success("Recap script၊ မြန်မာအသံ၊ မြန်မာစာတန်းနဲ့ Final MP4 အားလုံးပြီးပါပြီ။")
+                    st.rerun()
+                except (ValueError, ImportError, OSError) as exc:
+                    st.session_state.bundle = None
+                    st.session_state.final_video = None
+                    progress.empty()
+                    timing.empty()
+                    st.error(f"Recap/MP4 မပြီးပါ: {exc}")
         if st.session_state.bundle:
             st.text_area("Editable Burmese recap", st.session_state.bundle["recap_bn"], height=170, key="editable_recap")
-            st.caption("Edit this narration before rendering. Changes are applied to the voiceover and subtitle timing.")
+            st.caption("ဒီစာမူကို ပြင်ပြီးနောက် Final tab က render ခလုတ်ကိုသုံးနိုင်ပါတယ်။")
     with tabs[2]:
         voice_labels = {"my-MM-NilarNeural": "အမျိုးသမီးအသံ — ကြည်လင်ပြီး တည်ငြိမ်သောဟန်", "my-MM-ThihaNeural": "အမျိုးသားအသံ — နက်ရှိုင်းပြီး ရုပ်ရှင်ဆန်သောဟန်", "en-US-AriaNeural": "အင်္ဂလိပ်အသံ — အရေးပေါ်အစားထိုးအသံ"}
         voice_name = st.selectbox("Voice profile / မြန်မာအသံပုံစံ", list(VOICE_NAMES), index=0, format_func=lambda name: voice_labels.get(name, name), key="voice_name")
