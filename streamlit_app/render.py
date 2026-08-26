@@ -51,6 +51,9 @@ def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_p
         raise ValueError("Rendering timed out. Try a shorter video.") from exc
     if result.returncode != 0:
         raise ValueError(f"MP4 rendering failed: {result.stderr[-700:]}")
+    output = Path(output_path)
+    if not output.is_file() or output.stat().st_size < 1024:
+        raise ValueError("FFmpeg finished without creating a valid MP4 output.")
 
 
 def embed_preview_html(source: SourceInfo) -> str | None:

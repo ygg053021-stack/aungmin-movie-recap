@@ -181,6 +181,7 @@ with right:
             elif not st.session_state.media_path:
                 st.error("Transcript recap script ရပါပြီ။ Final MP4 render အတွက် authorized video file ကို upload လုပ်ပါ။")
             else:
+                st.session_state.final_video = None
                 with st.spinner("Rendering Burmese voiceover, subtitles, effects, and 1080p/30fps MP4 preview…"):
                     try:
                         with tempfile.TemporaryDirectory() as workdir:
@@ -191,10 +192,14 @@ with right:
                             make_srt(st.session_state.bundle, duration, srt_path, editor.subtitle_offset, editor.subtitle_mode)
                             create_voiceover(st.session_state.bundle["recap_bn"], voice_path, voice_name)
                             render_mp4(st.session_state.media_path, srt_path, voice_path, output_path, editor, RATIOS[output_platform], music_path)
-                            st.session_state.final_video = Path(output_path).read_bytes()
+                            output_file = Path(output_path)
+                            if not output_file.is_file() or output_file.stat().st_size < 1024:
+                                raise ValueError("Final MP4 was not created. Nothing is available to download.")
+                            st.session_state.final_video = output_file.read_bytes()
                         st.success("Final MP4 ready. Open the Final recap tab on the left before downloading.")
-                    except (ValueError, ImportError) as exc:
-                        st.error(str(exc))
+                    except (ValueError, ImportError, OSError) as exc:
+                        st.session_state.final_video = None
+                        st.error(f"Render မပြီးသေးပါ: {exc}")
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="info" style="margin-top:.5rem;text-align:center">Use only media you own or have permission to process. Editing transformations do not remove copyright; provider access and download behavior depend on platform rules.</div>', unsafe_allow_html=True)

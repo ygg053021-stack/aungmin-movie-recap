@@ -26,7 +26,12 @@ def create_voiceover(script: str, path: str, voice_name: str) -> None:
     try:
         import edge_tts
         async def save_audio() -> None:
-            await edge_tts.Communicate(script[:8000], voice_name).save(path)
+            await asyncio.wait_for(edge_tts.Communicate(script[:8000], voice_name).save(path), timeout=120)
         asyncio.run(save_audio())
+        output = Path(path)
+        if not output.is_file() or output.stat().st_size < 128:
+            raise ValueError("Voiceover finished without creating an audio file.")
+    except asyncio.TimeoutError as exc:
+        raise ValueError("မြန်မာ voiceover ထုတ်ချိန် timeout ဖြစ်သွားပါတယ်။ Script ကိုတိုအောင်လုပ်ပြီး ပြန်စမ်းပါ။") from exc
     except Exception as exc:
         raise ValueError(f"Voiceover generation failed. Check the selected voice or server connection. {exc}") from exc

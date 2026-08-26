@@ -43,7 +43,7 @@ def upload_to_gemini(api_key: str, media_path: str) -> str:
                 },
                 method="POST",
             )
-            with urlopen(put, timeout=600) as response:
+            with urlopen(put, timeout=180) as response:
                 data = json.loads(response.read().decode("utf-8"))
         return data.get("file", {}).get("uri", "")
     except HTTPError as exc:
@@ -81,7 +81,7 @@ JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ M
         method="POST",
     )
     try:
-        with urlopen(request, timeout=150) as response:
+        with urlopen(request, timeout=120) as response:
             data = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:700]
@@ -130,7 +130,7 @@ TRANSCRIPT:
         method="POST",
     )
     try:
-        with urlopen(request, timeout=150) as response:
+        with urlopen(request, timeout=120) as response:
             data = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:700]
