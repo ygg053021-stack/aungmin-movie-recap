@@ -1,355 +1,16 @@
-import asyncio
-import base64
-import json
-import os
-import re
-import shutil
-import subprocess
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_NAME = "AungMin Movie Recap"
-MODEL_NAME = "gemini-3.6-flash"
-PLATFORMS = ("YouTube", "TikTok", "Bilibili", "RedNote", "Facebook", "Generic")
-RATIOS = {"YouTube": "16:9", "TikTok": "9:16", "Bilibili": "16:9", "RedNote": "9:16", "Facebook": "1:1", "Generic": "16:9"}
-VOICE_NAMES = ("my-MM-NilarNeural", "my-MM-ThihaNeural", "en-US-AriaNeural")
-SUPPORTED_DOMAINS = {
-    "YouTube": ("youtube.com", "youtu.be"),
-    "TikTok": ("tiktok.com",),
-    "Bilibili": ("bilibili.com", "b23.tv"),
-    "RedNote": ("xiaohongshu.com", "xhslink.com"),
-}
-
-
-@dataclass(frozen=True)
-class SourceInfo:
-    url: str
-    platform: str
-    host: str
-    name: str
-
-
-@dataclass
-class EditorState:
-    speed: float = 1.0
-    flip: bool = False
-    blur_strength: int = 0
-    blur_x: int = 8
-    blur_y: int = 12
-    blur_w: int = 34
-    blur_h: int = 22
-    subtitle_position: str = "Bottom"
-    subtitle_mode: str = "Burmese + English"
-    subtitle_size: int = 34
-    subtitle_offset: float = 0.0
-    logo_position: str = "Top Right"
-    music_name: str = ""
-
-
-def inspect_source(url: str) -> SourceInfo:
-    clean = (url or "").strip()
-    parsed = urlparse(clean)
-    if not clean or len(clean) > 2048 or parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("Please paste a valid public link beginning with http:// or https://.")
-    host = (parsed.hostname or "").lower().removeprefix("www.")
-    platform = "Generic"
-    for name, domains in SUPPORTED_DOMAINS.items():
-        if host in domains or any(host.endswith("." + domain) for domain in domains):
-            platform = name
-            break
-    return SourceInfo(clean, platform, parsed.netloc, parsed.netloc)
-
-
-def probe_duration(media_path: str) -> float:
-    import imageio_ffmpeg
-    result = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-i", media_path], capture_output=True, text=True, timeout=60)
-    match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)
-    if not match:
-        return 0.0
-    hours, minutes, seconds = match.groups()
-    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-
-
-def save_uploaded_file(uploaded, prefix: str) -> str:
-    suffix = Path(uploaded.name).suffix.lower() or ".mp4"
-    path = Path(tempfile.gettempdir()) / f"{prefix}{suffix}"
-    path.write_bytes(uploaded.getvalue())
-    return str(path)
-
-
-def prepare_quick_media(media_path: str) -> str:
-    """Create a small analysis proxy so Quick Recap does not upload a huge original."""
-    import imageio_ffmpeg
-    source_duration = probe_duration(media_path)
-    # Keep enough context for a short recap while preventing runaway uploads.
-    max_seconds = min(max(source_duration, 1.0), 180.0) if source_duration else 180.0
-    quick_path = str(Path(tempfile.gettempdir()) / f"aungmin-quick-{os.getpid()}.mp4")
-    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-    command = [
-        ffmpeg, "-y", "-i", media_path, "-t", f"{max_seconds:.2f}",
-        "-vf", "scale=-2:360,fps=2", "-c:v", "libx264", "-preset", "ultrafast",
-        "-crf", "32", "-c:a", "aac", "-b:a", "48k", "-ac", "1", "-ar", "16000",
-        "-movflags", "+faststart", quick_path,
-    ]
-    try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=120)
-    except subprocess.TimeoutExpired as exc:
-        raise ValueError("Quick preview preparation timed out. Try a shorter video.") from exc
-    if result.returncode != 0 or not Path(quick_path).exists():
-        raise ValueError("Quick preview could not be prepared. Try an MP4 or a shorter video.")
-    return quick_path
-
-
-def download_authorized_source(url: str) -> str:
-    import yt_dlp
-    workdir = tempfile.mkdtemp(prefix="aungmin-source-")
-    output = str(Path(workdir) / "source.%(ext)s")
-    ffmpeg_location = shutil.which("ffmpeg")
-    if not ffmpeg_location:
-        try:
-            import imageio_ffmpeg
-            ffmpeg_location = imageio_ffmpeg.get_ffmpeg_exe()
-        except Exception:
-            ffmpeg_location = None
-    options = {
-        "outtmpl": output,
-        "format": "bv*+ba/b" if ffmpeg_location else "best[ext=mp4]/best",
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-    }
-    if ffmpeg_location:
-        options["ffmpeg_location"] = ffmpeg_location
-        options["merge_output_format"] = "mp4"
-    try:
-        with yt_dlp.YoutubeDL(options) as downloader:
-            downloader.download([url])
-    except Exception as exc:
-        raise ValueError(f"Source could not be loaded. Use a public video you own or have permission to process. {exc}") from exc
-    videos = [p for p in Path(workdir).glob("source.*") if p.suffix.lower() in {".mp4", ".webm", ".mkv", ".mov"}]
-    if not videos:
-        raise ValueError("The provider did not return a playable video file.")
-    # Preserve the provider's actual container so Gemini/FFmpeg receive the correct MIME type.
-    target = Path(tempfile.gettempdir()) / f"aungmin-link-source{videos[0].suffix.lower()}"
-    target.write_bytes(videos[0].read_bytes())
-    return str(target)
-
-
-def upload_to_gemini(api_key: str, media_path: str) -> str:
-    size = os.path.getsize(media_path)
-    suffix = Path(media_path).suffix.lower()
-    mime = {".webm": "video/webm", ".mov": "video/quicktime", ".mkv": "video/x-matroska"}.get(suffix, "video/mp4")
-    start_payload = json.dumps({}).encode("utf-8")
-    start = Request(
-        "https://generativelanguage.googleapis.com/upload/v1beta/files",
-        data=start_payload,
-        headers={
-            "x-goog-api-key": api_key.strip(),
-            "X-Goog-Upload-Protocol": "resumable",
-            "X-Goog-Upload-Command": "start",
-            "X-Goog-Upload-Header-Content-Length": str(size),
-            "X-Goog-Upload-Header-Content-Type": mime,
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(start, timeout=60) as response:
-            upload_url = response.headers.get("X-Goog-Upload-URL")
-        if not upload_url:
-            raise ValueError("Gemini did not return a file upload URL.")
-        with open(media_path, "rb") as media:
-            put = Request(
-                upload_url,
-                data=media.read(),
-                headers={
-                    "Content-Length": str(size),
-                    "X-Goog-Upload-Offset": "0",
-                    "X-Goog-Upload-Command": "upload, finalize",
-                    "Content-Type": mime,
-                },
-                method="POST",
-            )
-            with urlopen(put, timeout=600) as response:
-                data = json.loads(response.read().decode("utf-8"))
-        return data.get("file", {}).get("uri", "")
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:700]
-        raise ValueError(f"Gemini video upload failed ({exc.code}). {detail}") from exc
-    except URLError as exc:
-        raise ValueError("Gemini video upload could not be reached. Try a shorter video.") from exc
-
-
-def extract_gemini_text(data: dict) -> str:
-    parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-    return "\n".join(part.get("text", "") for part in parts if part.get("text")).strip()
-
-
-def generate_recap_bundle(api_key: str, source: SourceInfo, media_path: str, style: str, detail: str, speed: float, flipped: bool) -> dict:
-    quick_path = prepare_quick_media(media_path)
-    file_uri = upload_to_gemini(api_key, quick_path)
-    duration = probe_duration(quick_path)
-    target = "၅၀၀ မှ ၇၀၀" if duration else "တိုတောင်းပြီး အဓိကအချက်များပါဝင်သည့်"
-    prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။
-
-မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ Scene အစဉ်မလွဲပါနှင့်။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ Target length သည် Quick Recap အတွက် ၅၀၀ မှ ၇၀၀ မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ တစ်မိနစ်ခန့်အတွင်း ဖတ်ပြီးဆုံးနိုင်အောင် တိုတောင်းစွာရေးပါ။ Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
-
-JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ Markdown မသုံးပါနှင့်။ JSON key နှစ်ခုကို အောက်ပါအတိုင်း တိတိကျကျသုံးပါ:
-{{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မြန်မာစာတန်းထိုးရန် စာမူ"}}
-"""
-    payload = {
-        "contents": [{"parts": [{"text": prompt}, {"file_data": {"mime_type": "video/mp4", "file_uri": file_uri}}]}],
-        "generationConfig": {"temperature": 0.15, "maxOutputTokens": 4500},
-    }
-    request = Request(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent",
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"x-goog-api-key": api_key.strip(), "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=150) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:700]
-        raise ValueError(f"Gemini analysis failed ({exc.code}). {detail}") from exc
-    except URLError as exc:
-        raise ValueError("Gemini could not be reached while analyzing the video.") from exc
-    text = extract_gemini_text(data)
-    if not text:
-        raise ValueError("Gemini returned no text. Try a shorter public or uploaded video.")
-    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE | re.DOTALL)
-    try:
-        bundle = json.loads(cleaned)
-    except json.JSONDecodeError:
-        bundle = {"recap_bn": text, "subtitle_bn": text, "subtitle_en": ""}
-    recap = str(bundle.get("recap_bn", "")).strip()
-    if not recap:
-        raise ValueError("Gemini returned an empty recap. Try another valid video.")
-    return {
-        "recap_bn": recap,
-        "subtitle_bn": str(bundle.get("subtitle_bn", recap)).strip(),
-        "subtitle_en": str(bundle.get("subtitle_en", "")).strip(),
-    }
-
-
-def stamp(seconds: float) -> str:
-    total = max(0, int(seconds))
-    return f"00:{total // 60:02d}:{total % 60:02d},000"
-
-
-def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode: str = "Burmese + English") -> None:
-    bn = [line.strip() for line in bundle.get("subtitle_bn", "").splitlines() if line.strip()]
-    en = [line.strip() for line in bundle.get("subtitle_en", "").splitlines() if line.strip()]
-    recap = [line.strip() for line in bundle.get("recap_bn", "").splitlines() if line.strip()]
-    lines = bn or recap or ["AungMin Movie Recap"]
-    chunk = max(3.0, (duration or len(lines) * 4) / len(lines))
-    with open(path, "w", encoding="utf-8") as handle:
-        for index, line in enumerate(lines, 1):
-            start = max(0.0, (index - 1) * chunk + offset)
-            end = max(start + 1.0, index * chunk + offset)
-            english = en[index - 1] if index - 1 < len(en) else ""
-            if mode == "Burmese only": english = ""
-            if mode == "English only": line = english or line
-            caption = line[:220] + (f"\n{english[:220]}" if english and mode == "Burmese + English" else "")
-            handle.write(f"{index}\n{stamp(start)} --> {stamp(end)}\n{caption}\n\n")
-
-
-def create_voiceover(script: str, path: str, voice_name: str) -> None:
-    try:
-        import edge_tts
-        async def save_audio() -> None:
-            await edge_tts.Communicate(script[:8000], voice_name).save(path)
-        asyncio.run(save_audio())
-    except Exception as exc:
-        raise ValueError(f"Voiceover generation failed. Check the selected voice or server connection. {exc}") from exc
-
-
-def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_path: str, effects: EditorState, ratio: str, music_path: str | None = None) -> None:
-    import imageio_ffmpeg
-    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-    subtitle_path = srt_path.replace("\\", "/").replace(":", "\\:")
-    video_filters = ["scale=-2:720", f"subtitles='{subtitle_path}'"]
-    if effects.blur_strength > 0:
-        video_filters.append(f"boxblur={max(1, effects.blur_strength // 12)}:1")
-    if effects.flip:
-        video_filters.append("hflip")
-    if ratio == "9:16":
-        video_filters.append("crop=ih*9/16:ih")
-    elif ratio == "1:1":
-        video_filters.append("crop=ih:ih")
-    if effects.speed != 1.0:
-        video_filters.append(f"setpts=PTS/{effects.speed}")
-    command = [ffmpeg, "-y", "-i", source_path]
-    if voice_path:
-        command += ["-i", voice_path]
-    if music_path:
-        command += ["-i", music_path]
-    command += ["-vf", ",".join(video_filters), "-map", "0:v:0"]
-    if voice_path and music_path:
-        command += ["-filter_complex", "[1:a]volume=1.0[voice];[2:a]volume=0.18[music];[voice][music]amix=inputs=2:duration=shortest[aout]", "-map", "[aout]"]
-    elif voice_path:
-        command += ["-map", "1:a:0"]
-    elif music_path:
-        command += ["-map", "2:a:0"]
-    else:
-        command += ["-map", "0:a:0?"]
-    command += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-c:a", "aac", "-shortest", "-movflags", "+faststart", output_path]
-    try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=900)
-    except subprocess.TimeoutExpired as exc:
-        raise ValueError("Rendering timed out. Try a shorter video.") from exc
-    if result.returncode != 0:
-        raise ValueError(f"MP4 rendering failed: {result.stderr[-700:]}")
-
-
-def embed_preview_html(source: SourceInfo) -> str | None:
-    """Return a browser preview for providers that expose an embed URL."""
-    if source.platform != "YouTube":
-        return None
-    parsed = urlparse(source.url)
-    video_id = parsed.path.rstrip("/").split("/")[-1] if "youtu.be" in (parsed.hostname or "") else ""
-    if parsed.query:
-        from urllib.parse import parse_qs
-        video_id = parse_qs(parsed.query).get("v", [video_id])[0]
-    if not video_id:
-        return None
-    safe_id = re.sub(r"[^A-Za-z0-9_-]", "", video_id)
-    if not safe_id:
-        return None
-    return f'''<style>html,body{{margin:0;background:#090d1b;overflow:hidden}}iframe{{width:100%;height:380px;border:0;border-radius:18px;background:#10172b}}</style><iframe src="https://www.youtube-nocookie.com/embed/{safe_id}?rel=0" title="YouTube preview" allowfullscreen></iframe>'''
-
-
-def preview_html(media_path: str, state: EditorState, final: bool = False) -> str:
-    if not media_path or not Path(media_path).exists():
-        return '<div class="empty-preview">Load a source video to see it here.</div>'
-    encoded = base64.b64encode(Path(media_path).read_bytes()).decode("ascii")
-    mime = "video/mp4" if media_path.lower().endswith(".mp4") else "video/webm"
-    transform = "scaleX(-1)" if state.flip else "none"
-    opacity = min(0.82, max(0.05, state.blur_strength / 115))
-    blur_box = f"left:{state.blur_x}%;top:{state.blur_y}%;width:{state.blur_w}%;height:{state.blur_h}%;opacity:{opacity};"
-    label = "FINAL RECAP PREVIEW" if final else "ORIGINAL SOURCE PREVIEW"
-    return f"""
-    <style>
-      html,body{{margin:0;background:#090d1b;overflow:hidden}}
-      .stage{{position:relative;height:380px;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:18px;background:#0f172b;display:grid;place-items:center}}
-      video{{width:100%;height:100%;object-fit:contain;transform:{transform}}}
-      .blurbox{{position:absolute;{blur_box}border:2px solid #70e8d8;background:rgba(112,232,216,.24);box-sizing:border-box;resize:both;overflow:auto;cursor:move}}
-      .tag{{position:absolute;left:14px;top:12px;padding:7px 10px;border-radius:8px;background:rgba(5,8,18,.76);color:#f7f8ff;font:700 10px system-ui;letter-spacing:.12em}}
-      .hint{{position:absolute;right:14px;bottom:12px;padding:6px 9px;border-radius:7px;background:rgba(5,8,18,.76);color:#b8c0d7;font:600 10px system-ui}}
-      .empty-preview{{height:380px;display:grid;place-items:center;color:#c6cde0;background:#10172b;border-radius:18px;font:600 14px system-ui}}
-    </style>
-    <div class="stage"><video id="v" controls playsinline src="data:{mime};base64,{encoded}"></video><div class="blurbox"></div><div class="tag">{label}</div><div class="hint">{state.speed:.2f}× · {"FLIPPED" if state.flip else "NORMAL"}</div></div>
-    <script>const v=document.getElementById('v');v.playbackRate={state.speed};</script>
-    """
-
+from streamlit_app import (
+    APP_NAME, EditorState, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
+    create_voiceover, download_authorized_source, embed_preview_html,
+    generate_recap_bundle, inspect_source, make_srt, preview_html,
+    probe_duration, render_mp4, save_uploaded_file, duration_notice,
+    validate_media_file, MAX_DURATION_SECONDS,
+)
 
 st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""
@@ -429,20 +90,28 @@ with right:
         mode = st.radio("Input type", ["Upload video", "Paste video link"], horizontal=True, key="input_mode")
         uploaded = st.file_uploader("Upload video file", type=["mp4", "mov", "webm", "mkv"], key="source_upload") if mode == "Upload video" else None
         source_url = st.text_input("Video link", placeholder="YouTube · TikTok · Bilibili · RedNote · public URL", key="source_url") if mode == "Paste video link" else ""
-        st.caption("Public/authorized media only. Link loading depends on provider access rules.")
+        st.caption("Public/authorized media only. Link loading depends on provider access rules. Video limit: 5 minutes.")
         st.session_state.api_key = st.text_input("Google AI Studio API key", type="password", key="api_key_input", help="Session-only key. Never commit it to GitHub.")
         if st.button("Load original video", type="primary", use_container_width=True):
             try:
                 if mode == "Upload video":
                     if not uploaded: raise ValueError("Choose a video file first.")
-                    st.session_state.media_path = save_uploaded_file(uploaded, "aungmin-uploaded-source")
+                    candidate = save_uploaded_file(uploaded, "aungmin-uploaded-source")
+                    duration = probe_duration(candidate)
+                    validate_media_file(candidate, duration)
+                    st.session_state.media_path = candidate
                     st.session_state.source = SourceInfo(f"upload://{uploaded.name}", "Upload", uploaded.name, uploaded.name)
+                    st.info(duration_notice(duration))
                 else:
                     source = inspect_source(source_url)
                     st.session_state.source = source
                     try:
                         with st.spinner("Loading the original source video…"):
-                            st.session_state.media_path = download_authorized_source(source.url)
+                            candidate = download_authorized_source(source.url)
+                        duration = probe_duration(candidate)
+                        validate_media_file(candidate, duration)
+                        st.session_state.media_path = candidate
+                        st.info(duration_notice(duration))
                     except ValueError as exc:
                         st.session_state.media_path = None
                         st.warning(f"Link preview ရနိုင်သော်လည်း download မရပါ: {exc}")
