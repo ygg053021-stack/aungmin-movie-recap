@@ -391,3 +391,27 @@
 - [x] Push the complete component fix to GitHub main
 
 ရက်စွဲ: 2026-08-26 — screen recording confirmed the requested floating-photo editing behavior; live app still reported missing component directory.
+
+# Real source-frame floating preview correction — pending
+
+- [ ] Use an actual extracted frame from the uploaded source video instead of a blank white canvas background
+- [ ] Refresh the floating preview frame when the user changes the preview timestamp
+- [ ] Keep blur, subtitle, logo, and watermark coordinates synchronized with the real source frame
+- [ ] Make subtitle preview size/line wrapping match the final export geometry
+- [ ] Validate Burmese font shaping with a verified readable font and preserve the user's font choices
+- [ ] Run real source-frame preview, overlay sync, subtitle, and MP4 regression tests
+- [ ] Push the verified real-frame preview correction to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user reported blank/white floating preview and requested the actual source-video image with exact live overlay feedback.
+
+# Real source-frame and optional overlay controls — completed
+
+- [x] Use an actual extracted source-video frame in the floating editor instead of any blank/white fallback
+- [x] Add preview timestamp control so the user can inspect the exact scene containing original subtitles
+- [x] Keep blur, subtitle, logo, and watermark drag/resize state synchronized with that source frame
+- [x] Add explicit subtitle on/off and blur on/off controls that affect preview and final export
+- [x] Correct Burmese font selection and subtitle wrapping so the preview does not cover the whole video
+- [x] Run deployment-style component, preview, toggle, overlay, and real MP4 regression tests
+- [x] Push the verified correction to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user requested source-video frame preview, immediate overlay feedback, optional blur/subtitle toggles, and readable Burmese output.

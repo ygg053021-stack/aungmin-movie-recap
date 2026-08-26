@@ -7,15 +7,16 @@ from pathlib import Path
 from .config import EditorState
 
 
-def extract_preview_frame(media_path: str, width: int = 720, height: int = 405):
-    """Extract a first-frame PIL image for direct on-screen editing."""
+def extract_preview_frame(media_path: str, width: int = 720, height: int = 405, timestamp: float = 0.0):
+    """Extract the selected source-video frame for direct on-screen editing."""
     from io import BytesIO
     import imageio_ffmpeg
     from PIL import Image
 
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    seek = max(0.0, float(timestamp or 0.0))
     command = [
-        ffmpeg, "-hide_banner", "-loglevel", "error", "-ss", "0", "-i", media_path,
+        ffmpeg, "-hide_banner", "-loglevel", "error", "-ss", f"{seek:.3f}", "-i", media_path,
         "-frames:v", "1", "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black",
         "-f", "image2pipe", "-vcodec", "png", "pipe:1",
     ]
@@ -64,13 +65,13 @@ def canvas_initial_drawing(state: EditorState, width: int, height: int, subtitle
     x, y = state.blur_x * width / 100, state.blur_y * height / 100
     w, h = state.blur_w * width / 100, state.blur_h * height / 100
     objects = []
-    if state.blur_strength > 0:
+    if getattr(state, "blur_enabled", state.blur_strength > 0) and state.blur_strength > 0:
         objects.append({
             "type": "rect", "name": "blur", "left": x, "top": y, "width": w, "height": h,
             "fill": "rgba(0,0,0,0.58)", "stroke": "#70e8d8", "strokeWidth": 3,
             "selectable": True, "hasControls": True, "lockRotation": True,
         })
-    if subtitle.strip():
+    if getattr(state, "subtitle_enabled", True) and subtitle.strip():
         objects.append({
             "type": "i-text", "name": "subtitle", "left": width * state.subtitle_x / 100, "top": height * state.subtitle_y / 100,
             "text": subtitle[:120], "fontSize": max(18, min(42, int(state.subtitle_size * height / 1080))),

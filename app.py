@@ -246,7 +246,8 @@ with right:
         st.caption("Auto subtitle မမှန်ရင် ဒီနေရာမှာ ပြင်နိုင်ပါတယ်။ စာတန်း၊ logo နဲ့ watermark ကို video preview ပေါ်မှာ ချက်ချင်းမြင်ပြီး ရွှေ့နိုင်ပါမယ်။")
         editor.speed = 1.0
         editor.flip = False
-        blur_enabled = st.checkbox("Chinese/မူရင်းစာတန်းနေရာကို Blur ထည့်မယ်", value=editor.blur_strength > 0, key="blur_enabled")
+        blur_enabled = st.checkbox("Blur အဖွင့် / အပိတ်", value=editor.blur_enabled or editor.blur_strength > 0, key="blur_enabled")
+        editor.blur_enabled = blur_enabled
         blur_mode = st.selectbox("Blur mode / အုပ်မည့်နည်း", ["Auto default (အောက်ခြေစာတန်း)", "Manual drag (video ပေါ်ရွှေ့ရန်)"], index=0, key="blur_mode", disabled=not blur_enabled)
         editor.blur_strength = st.slider("Blur strength / အုပ်အား", 0, 60, 28, 2, disabled=not blur_enabled) if blur_enabled else 0
         if blur_enabled and blur_mode.startswith("Auto"):
@@ -258,6 +259,8 @@ with right:
             editor.blur_w = st.slider("Blur width %", 5, 100, editor.blur_w, 1)
             editor.blur_h = st.slider("Blur height %", 5, 60, editor.blur_h, 1)
         editor.subtitle_mode = "Burmese only"
+        subtitle_enabled = st.checkbox("Subtitle အဖွင့် / အပိတ်", value=editor.subtitle_enabled, key="subtitle_enabled")
+        editor.subtitle_enabled = subtitle_enabled
         editor.subtitle_position = st.selectbox("Subtitle position / စာတန်းနေရာ", ["Bottom", "Center", "Top"], index=0, key="subtitle_position")
         editor.subtitle_size = st.slider("Subtitle size / စာလုံးအရွယ်", 24, 64, 42, 2, key="subtitle_size")
         editor.subtitle_font = st.session_state.get("subtitle_font", "Pyidaungsu Book Regular")
@@ -266,14 +269,16 @@ with right:
             st.markdown("**Blur / subtitle / logo / watermark ကို video frame ပေါ်မှာ တိုက်ရိုက်ရွှေ့ပြီး ချိန်ပါ**")
             try:
                 from streamlit_drawable_canvas import st_canvas
-                frame = extract_preview_frame(st.session_state.media_path, width=720, height=405)
+                source_duration = max(0.1, float(probe_duration(st.session_state.media_path)))
+                preview_time = st.slider("Preview scene / လက်ရှိကြည့်မည့်အချိန်", 0.0, source_duration, min(float(st.session_state.get("preview_time", 0.0)), source_duration), 0.1, key="preview_time")
+                frame = extract_preview_frame(st.session_state.media_path, width=720, height=405, timestamp=preview_time)
                 preview_text = st.session_state.get("manual_subtitle", "").strip() or (st.session_state.bundle or {}).get("subtitle_bn", "")
                 logo_path = st.session_state.get("logo_path")
-                canvas_key = f"finish_overlay_canvas_{editor.subtitle_font}_{editor.subtitle_size}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_strength}"
+                canvas_key = f"finish_overlay_canvas_{round(preview_time, 1)}_{editor.subtitle_font}_{editor.subtitle_size}_{editor.subtitle_enabled}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_enabled}_{editor.blur_strength}"
                 canvas_result = st_canvas(
                     fill_color="rgba(0, 0, 0, 0.58)", stroke_width=3, stroke_color="#70e8d8",
                     background_image=frame, update_streamlit=True, height=405, width=720,
-                    drawing_mode="transform", initial_drawing=canvas_initial_drawing(editor, 720, 405, preview_text, FONT_FAMILIES.get(editor.subtitle_font, "Pyidaungsu Book"), logo_path),
+                    drawing_mode="transform",                     initial_drawing=canvas_initial_drawing(editor, 720, 405, preview_text if editor.subtitle_enabled else "", FONT_FAMILIES.get(editor.subtitle_font, "Pyidaungsu Book"), logo_path),
                     display_toolbar=True, key=canvas_key,
                 )
                 editor, coords = sync_blur_from_canvas(editor, canvas_result.json_data, 720, 405)

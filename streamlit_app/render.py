@@ -72,8 +72,8 @@ def _video_graph(source_path: str, srt_path: str | None, effects: EditorState, r
     # Aspect-ratio crop is already included above for portrait outputs.
     if effects.speed != 1.0:
         pre.append(f"setpts=PTS/{max(0.25, min(4.0, effects.speed))}")
-    subtitle = _subtitle_filter(srt_path, effects) if srt_path and Path(srt_path).is_file() and Path(srt_path).stat().st_size > 0 else ""
-    if effects.blur_strength > 0:
+    subtitle = _subtitle_filter(srt_path, effects) if getattr(effects, "subtitle_enabled", True) and srt_path and Path(srt_path).is_file() and Path(srt_path).stat().st_size > 0 else ""
+    if getattr(effects, "blur_enabled", effects.blur_strength > 0) and effects.blur_strength > 0:
         x = max(0.0, min(0.95, effects.blur_x / 100))
         y = max(0.0, min(0.95, effects.blur_y / 100))
         w = max(0.03, min(1.0 - x, effects.blur_w / 100))

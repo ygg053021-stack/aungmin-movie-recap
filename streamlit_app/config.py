@@ -57,6 +57,8 @@ class SourceInfo:
 class EditorState:
     speed: float = 1.0
     flip: bool = False
+    blur_enabled: bool = False
+    subtitle_enabled: bool = True
     blur_strength: int = 0
     blur_x: int = 5
     blur_y: int = 72
