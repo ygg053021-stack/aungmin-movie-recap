@@ -326,6 +326,15 @@
 - [x] Make 04 Finish consume only the approved No.3 recap video and provide live blur/subtitle/font/size/position/logo finishing
 - [x] Ensure final MP4 uses the approved narration and edited visual state without restoring original audio
 - [x] Run full four-stage workflow, audio replacement, timing, overlay, font, and MP4 regression tests
-- [ ] Push the verified four-stage workflow rebuild to GitHub main
+- [x] Push the verified four-stage workflow rebuild to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user confirmed the exact Source → Script → Voice/Recap → Finish workflow and requested GitHub implementation.
+
+# Voice preview empty subtitle input fix — pending
+
+- [x] Make No.3 voice-only preview skip the subtitle filter instead of passing an empty SRT file to FFmpeg/libass
+- [x] Keep No.4 Finish subtitle rendering on a valid generated/manual SRT file
+- [x] Add regression test for subtitle-free approved voice preview and rerun full MP4 tests
+- [ ] Push the Voice preview fix to GitHub main
+
+ရက်စွဲ: 2026-08-26 — live screenshot reported FFmpeg/libass `Unable to open ... no-finish-subtitles.srt` during No.3 Voice preview.

@@ -31,7 +31,7 @@ def _subtitle_filter(srt_path: str, effects: EditorState) -> str:
     return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':force_style='{style}'"
 
 
-def _video_graph(source_path: str, srt_path: str, effects: EditorState, ratio: str, target_fps: int) -> str:
+def _video_graph(source_path: str, srt_path: str | None, effects: EditorState, ratio: str, target_fps: int) -> str:
     width, height = _output_size(ratio)
     if ratio in {"9:16", "3:4"}:
         # Fill portrait canvas like the reference edit, then crop the sides;
@@ -44,24 +44,24 @@ def _video_graph(source_path: str, srt_path: str, effects: EditorState, ratio: s
     # Aspect-ratio crop is already included above for portrait outputs.
     if effects.speed != 1.0:
         pre.append(f"setpts=PTS/{max(0.25, min(4.0, effects.speed))}")
-    subtitle = _subtitle_filter(srt_path, effects)
+    subtitle = _subtitle_filter(srt_path, effects) if srt_path and Path(srt_path).is_file() and Path(srt_path).stat().st_size > 0 else ""
     if effects.blur_strength > 0:
         x = max(0.0, min(0.95, effects.blur_x / 100))
         y = max(0.0, min(0.95, effects.blur_y / 100))
         w = max(0.03, min(1.0 - x, effects.blur_w / 100))
         h = max(0.03, min(1.0 - y, effects.blur_h / 100))
         radius = max(2, min(30, effects.blur_strength // 2))
-        return (
+        graph = (
             f"[0:v]{','.join(pre)}[base];"
             f"[base]split=2[clean][blur];"
             f"[blur]crop=w=iw*{w:.4f}:h=ih*{h:.4f}:x=iw*{x:.4f}:y=ih*{y:.4f},boxblur={radius}:2[blurred];"
             f"[clean][blurred]overlay=x=main_w*{x:.4f}:y=main_h*{y:.4f}:shortest=1[blurred_base];"
-            f"[blurred_base]{subtitle}[vbase]"
         )
-    return f"[0:v]{','.join(pre + [subtitle])}[vbase]"
+        return graph + (f"[blurred_base]{subtitle}[vbase]" if subtitle else "[blurred_base]null[vbase]")
+    return f"[0:v]{','.join(pre + ([subtitle] if subtitle else []))}[vbase]"
 
 
-def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_path: str, effects: EditorState, ratio: str, music_path: str | None = None, target_width: int = 1920, target_height: int = 1080, target_fps: int = 30, logo_path: str | None = None) -> None:
+def render_mp4(source_path: str, srt_path: str | None, voice_path: str | None, output_path: str, effects: EditorState, ratio: str, music_path: str | None = None, target_width: int = 1920, target_height: int = 1080, target_fps: int = 30, logo_path: str | None = None) -> None:
     import imageio_ffmpeg
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     source_duration = 0.0

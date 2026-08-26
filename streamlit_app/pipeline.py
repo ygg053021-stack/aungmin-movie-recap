@@ -35,18 +35,17 @@ def render_voice_preview(
     root = Path(tempfile.gettempdir()) / "aungmin-approved-voice"
     root.mkdir(parents=True, exist_ok=True)
     voice_path = root / "approved-voice.mp3"
-    blank_srt = root / "no-finish-subtitles.srt"
     output_path = root / "approved-voice-preview.mp4"
     started = time.monotonic()
     if progress:
         progress(12, "အတည်ပြုထားသော script မှ မြန်မာအသံ ဖန်တီးနေသည်", started)
     create_voiceover(recap, str(voice_path), voice_name)
-    blank_srt.write_text("", encoding="utf-8")
     if progress:
         progress(55, "မူရင်းအသံကို ဖယ်ပြီး recap voice preview ပေါင်းနေသည်", started)
     ratio = {"YouTube": "16:9", "TikTok": "9:16", "Facebook": "1:1"}.get(output_platform, "16:9")
     preview_editor = EditorState(speed=1.0, flip=False, blur_strength=0)
-    render_mp4(media_path, str(blank_srt), str(voice_path), str(output_path), preview_editor, ratio)
+    # No.3 is voice-only: omit subtitles entirely. Finish creates the valid SRT.
+    render_mp4(media_path, None, str(voice_path), str(output_path), preview_editor, ratio)
     if not output_path.is_file() or output_path.stat().st_size < 1024:
         raise ValueError("Voice preview MP4 မဖန်တီးနိုင်ပါ။")
     if progress:

@@ -31,6 +31,12 @@ class ReferenceStyleTests(unittest.TestCase):
         self.assertIn("overlay=x=main_w*0.0500:y=main_h*0.7200", graph)
         self.assertNotIn("[0:v]boxblur", graph)
 
+    def test_voice_preview_graph_skips_missing_srt(self):
+        state = EditorState(blur_strength=0)
+        graph = _video_graph("/tmp/source.mp4", None, state, "9:16", 30)
+        self.assertNotIn("subtitles=", graph)
+        self.assertIn("scale=1080:1920", graph)
+
     def test_supplied_ttf_files_exist_and_preview_subtitle_is_rendered(self):
         font_dir = Path(__file__).parent / "fonts"
         self.assertTrue((font_dir / "Pyidaungsu-Book-Regular.ttf").is_file())
