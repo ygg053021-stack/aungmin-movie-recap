@@ -6,11 +6,17 @@ from urllib.parse import parse_qs, urlparse
 
 from .config import EditorState, SourceInfo
 
-def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_path: str, effects: EditorState, ratio: str, music_path: str | None = None) -> None:
+def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_path: str, effects: EditorState, ratio: str, music_path: str | None = None, target_width: int = 1920, target_height: int = 1080, target_fps: int = 30) -> None:
     import imageio_ffmpeg
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     subtitle_path = srt_path.replace("\\", "/").replace(":", "\\:")
-    video_filters = ["scale=-2:720", f"subtitles='{subtitle_path}'"]
+    source_duration = 0.0
+    try:
+        from .media import probe_duration
+        source_duration = probe_duration(source_path)
+    except Exception:
+        source_duration = 0.0
+    video_filters = [f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease", f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black", f"fps={target_fps}", f"subtitles='{subtitle_path}'"]
     if effects.blur_strength > 0:
         video_filters.append(f"boxblur={max(1, effects.blur_strength // 12)}:1")
     if effects.flip:
@@ -35,7 +41,10 @@ def render_mp4(source_path: str, srt_path: str, voice_path: str | None, output_p
         command += ["-map", "2:a:0"]
     else:
         command += ["-map", "0:a:0?"]
-    command += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-c:a", "aac", "-shortest", "-movflags", "+faststart", output_path]
+    command += ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-c:a", "aac"]
+    if source_duration > 0:
+        command += ["-t", f"{source_duration:.3f}"]
+    command += ["-movflags", "+faststart", output_path]
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=900)
     except subprocess.TimeoutExpired as exc:

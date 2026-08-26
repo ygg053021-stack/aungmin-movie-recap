@@ -64,7 +64,14 @@ def prepare_quick_media(media_path: str) -> str:
     return quick_path
 
 
-def download_authorized_source(url: str) -> str:
+QUALITY_FORMATS = {
+    "MP4 720p": "bv*[height<=720][ext=mp4]+ba/b[height<=720][ext=mp4]/best[height<=720]/best",
+    "MP4 480p": "bv*[height<=480][ext=mp4]+ba/b[height<=480][ext=mp4]/best[height<=480]/best",
+    "MP4 360p": "bv*[height<=360][ext=mp4]+ba/b[height<=360][ext=mp4]/best[height<=360]/best",
+}
+
+
+def download_authorized_source(url: str, quality: str = "MP4 720p") -> str:
     import yt_dlp
     workdir = tempfile.mkdtemp(prefix="aungmin-source-")
     output = str(Path(workdir) / "source.%(ext)s")
@@ -77,7 +84,7 @@ def download_authorized_source(url: str) -> str:
             ffmpeg_location = None
     options = {
         "outtmpl": output,
-        "format": "bv*+ba/b" if ffmpeg_location else "best[ext=mp4]/best",
+        "format": QUALITY_FORMATS.get(quality, QUALITY_FORMATS["MP4 720p"]) if ffmpeg_location else "best[ext=mp4]/best",
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,

@@ -91,7 +91,8 @@ with right:
         mode = st.radio("Input type", ["Upload video", "Paste video link"], horizontal=True, key="input_mode")
         uploaded = st.file_uploader("Upload video file", type=["mp4", "mov", "webm", "mkv"], key="source_upload") if mode == "Upload video" else None
         source_url = st.text_input("Video link", placeholder="YouTube · TikTok · Bilibili · RedNote · public URL", key="source_url") if mode == "Paste video link" else ""
-        st.caption("Public/authorized media only. Link loading depends on provider access rules. Video limit: 5 minutes.")
+        quality = st.selectbox("Download quality / အရည်အသွေး", ["MP4 720p", "MP4 480p", "MP4 360p"], index=0, key="download_quality") if mode == "Paste video link" else "MP4 720p"
+        st.caption("Public/authorized media only. Link loading depends on provider access rules. Video limit: 5 minutes. Quality options depend on provider availability.")
         st.session_state.api_key = st.text_input("Google AI Studio API key", type="password", key="api_key_input", help="Session-only key. Never commit it to GitHub.")
         if st.button("Load original video", type="primary", use_container_width=True):
             try:
@@ -109,7 +110,7 @@ with right:
                     st.session_state.source = source
                     try:
                         with st.spinner("Loading the original source video…"):
-                            candidate = download_authorized_source(source.url)
+                            candidate = download_authorized_source(source.url, quality)
                         duration = probe_duration(candidate)
                         validate_media_file(candidate, duration)
                         st.session_state.media_path = candidate
@@ -171,6 +172,7 @@ with right:
         editor.subtitle_size = 34
         editor.subtitle_offset = 0.0
         output_platform = st.selectbox("Output format", PLATFORMS, format_func=lambda item: f"{item} · {RATIOS[item]}", key="output_platform")
+        st.info("Final output: 1920×1080 · 30 FPS · မူရင်း video ကြာချိန်အတိုင်း။ Source က 720p/480p ဖြစ်လျှင် 1080p သို့ upscale လုပ်မည်၊ မူရင်း detail အသစ်ဖန်တီးမည်မဟုတ်ပါ။")
         music_path = None
         st.markdown('<div class="section-note">Blur ကို privacy/editing အတွက်သာ အသုံးပြုမည်။ Final video တွင် မြန်မာ voice narration နှင့် မြန်မာ subtitle တစ်မျိုးတည်း ပါမည်။</div>', unsafe_allow_html=True)
         if st.button("Render final recap video", type="primary", use_container_width=True):
@@ -179,7 +181,7 @@ with right:
             elif not st.session_state.media_path:
                 st.error("Transcript recap script ရပါပြီ။ Final MP4 render အတွက် authorized video file ကို upload လုပ်ပါ။")
             else:
-                with st.spinner("Rendering voiceover, bilingual subtitles, effects, and MP4 preview…"):
+                with st.spinner("Rendering Burmese voiceover, subtitles, effects, and 1080p/30fps MP4 preview…"):
                     try:
                         with tempfile.TemporaryDirectory() as workdir:
                             srt_path = str(Path(workdir) / "captions.srt")
