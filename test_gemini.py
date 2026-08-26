@@ -86,6 +86,12 @@ class GeminiRecoveryTests(unittest.TestCase):
         sleep.assert_not_called()
         self.assertEqual(response.output_text, FakeResponse.output_text)
 
+    def test_bundle_parser_preserves_chronological_scene_segments(self):
+        text = '{"recap_bn":"အစမှအဆုံး recap","subtitle_bn":"စာတန်း","segments":[{"start":4,"end":10,"text":"ဒုတိယ scene"},{"start":0,"end":4,"text":"ပထမ scene"},{"start":12,"end":30,"text":"ကန့်သတ်ပြီးနောက် scene"}]}'
+        bundle = gemini._parse_bundle(text, duration=15)
+        self.assertEqual([segment["text"] for segment in bundle["segments"]], ["ပထမ scene", "ဒုတိယ scene", "ကန့်သတ်ပြီးနောက် scene"])
+        self.assertEqual(bundle["segments"][-1]["end"], 15.0)
+
     def test_bundle_parser_accepts_sdk_output_text(self):
         bundle = gemini._parse_bundle(FakeResponse.output_text)
         self.assertEqual(bundle["recap_bn"], "စမ်းသပ် recap")

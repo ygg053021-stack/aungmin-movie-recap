@@ -45,13 +45,16 @@ def prepare_quick_media(media_path: str) -> str:
     """Create a small analysis proxy so Quick Recap does not upload a huge original."""
     import imageio_ffmpeg
     source_duration = probe_duration(media_path)
-    # Keep enough context for a short recap while preventing runaway uploads.
-    max_seconds = min(max(source_duration, 1.0), 180.0) if source_duration else 180.0
+    # Keep the complete <=5-minute source so later scenes are not omitted.
+    # Longer sources are rejected by the app validator; the lower frame rate keeps
+    # the upload small enough for a fast Gemini analysis.
+    max_seconds = min(max(source_duration, 1.0), 300.0) if source_duration else 300.0
+    analysis_fps = 2 if max_seconds <= 180 else 1
     quick_path = str(Path(tempfile.gettempdir()) / f"aungmin-quick-{os.getpid()}.mp4")
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     command = [
         ffmpeg, "-y", "-i", media_path, "-t", f"{max_seconds:.2f}",
-        "-vf", "scale=-2:360,fps=2", "-c:v", "libx264", "-preset", "ultrafast",
+        "-vf", f"scale=-2:360,fps={analysis_fps}", "-c:v", "libx264", "-preset", "ultrafast",
         "-crf", "32", "-c:a", "aac", "-b:a", "48k", "-ac", "1", "-ar", "16000",
         "-movflags", "+faststart", quick_path,
     ]

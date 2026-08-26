@@ -338,3 +338,10 @@
 - [x] Push the Voice preview fix to GitHub main
 
 ရက်စွဲ: 2026-08-26 — live screenshot reported FFmpeg/libass `Unable to open ... no-finish-subtitles.srt` during No.3 Voice preview.
+
+# Scene-timed narration alignment — pending
+
+- [x] Ask Gemini for chronological narration segments with start/end timestamps instead of one undivided paragraph
+- [x] Generate and fit each segment to its scene window, then concatenate the timeline to exactly the source duration
+- [x] Fall back safely to whole-script duration fitting if a model response has no valid segments
+- [x] Test scene segment parsing, audio timeline duration, subtitle timing, and final MP4 output

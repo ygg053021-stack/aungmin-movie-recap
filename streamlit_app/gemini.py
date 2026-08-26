@@ -184,7 +184,33 @@ def extract_gemini_text(response: Any) -> str:
     return ""
 
 
-def _parse_bundle(text: str) -> dict:
+def _normalize_segments(raw: Any, duration: float | None = None) -> list[dict[str, float | str]]:
+    if not isinstance(raw, list):
+        return []
+    limit = max(0.0, float(duration or 0.0))
+    normalized: list[dict[str, float | str]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            start = max(0.0, float(item.get("start", 0.0)))
+            end = max(start, float(item.get("end", 0.0)))
+        except (TypeError, ValueError):
+            continue
+        text_value = str(item.get("text", "")).strip()
+        if not text_value or end <= start:
+            continue
+        if limit:
+            start = min(start, limit)
+            end = min(end, limit)
+        if end - start < 0.5:
+            continue
+        normalized.append({"start": start, "end": end, "text": text_value[:1200]})
+    normalized.sort(key=lambda segment: (float(segment["start"]), float(segment["end"])))
+    return normalized
+
+
+def _parse_bundle(text: str, duration: float | None = None) -> dict:
     if not text:
         raise ValueError("Gemini က recap စာမူမပြန်ပါ။")
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE | re.DOTALL)
@@ -195,11 +221,15 @@ def _parse_bundle(text: str) -> dict:
     recap = str(bundle.get("recap_bn", "")).strip()
     if not recap:
         raise ValueError("Gemini က empty recap ပြန်ပါသည်။ Video ကို ပြန်စမ်းပါ။")
-    return {
+    result = {
         "recap_bn": recap,
         "subtitle_bn": str(bundle.get("subtitle_bn", recap)).strip(),
         "subtitle_en": str(bundle.get("subtitle_en", "")).strip(),
     }
+    segments = _normalize_segments(bundle.get("segments"), duration)
+    if segments:
+        result["segments"] = segments
+    return result
 
 
 def generate_recap_bundle(
@@ -223,14 +253,20 @@ def generate_recap_bundle(
     if progress:
         progress(20, "Gemini video file ကို စစ်နေသည်", started)
     active_file = wait_for_file_active(api_key, uploaded, progress, started, client)
-    duration = probe_duration(quick_path)
-    target = "၅၀၀ မှ ၇၀၀" if duration else "တိုတောင်းပြီး အဓိကအချက်များပါဝင်သည့်"
-    prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။
+    duration = probe_duration(media_path)
+    # Burmese narration typically reads about 8–10 Unicode codepoints/sec with
+    # the selected neural voices; target that range so duration fitting only makes
+    # a small natural pacing correction instead of padding long silence.
+    target_chars = max(220, int(duration * 8.5)) if duration else 500
+    target = f"{max(160, target_chars - 40)} မှ {target_chars + 40}"
+    duration_text = f"{duration:.1f} စက္ကန့်" if duration else "မသိရသေးသောကြာချိန်"
+    prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပြီး **{duration_text} အတွင်း ဖတ်ပြီးဆုံးမည့် narration** ကိုရေးပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။
 
-မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ Scene အစဉ်မလွဲပါနှင့်။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ Target length သည် Quick Recap အတွက် {target} မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ တစ်မိနစ်ခန့်အတွင်း ဖတ်ပြီးဆုံးနိုင်အောင် တိုတောင်းစွာရေးပါ။ Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
+မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ **မြင်ကွင်းဖြစ်စဉ်အလိုက် အစမှအဆုံး မကျော်ဘဲ ရေးပါ**။ Scene အသစ်တိုင်းမှာ အဲဒီ scene ရဲ့ လုပ်ဆောင်ချက်ကို အရင်ပြောပြီး နောက်မှ အဓိပ္ပာယ်/ရလဒ်ကို ပြောပါ။ မြန်မြန်ကျော်သွားတဲ့ scene များကို စကားရှည်မရေးပါနှင့်။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ **Target length သည် {target} မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ {duration_text} ထက် စောပြီးမပြီး၊ ပိုပြီးမရှည်အောင် ရေးပါ။ အပိုအကြောင်းအရာ/နိဂုံးချုပ် filler မထည့်ပါနှင့်။** Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
 
 JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ Markdown မသုံးပါနှင့်။ JSON key နှစ်ခုကို အောက်ပါအတိုင်း တိတိကျကျသုံးပါ:
-{{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မြန်မာစာတန်းထိုးရန် စာမူ"}}"""
+{{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မြန်မာစာတန်းထိုးရန် စာမူ","segments":[{{"start":0,"end":8,"text":"အဲဒီအချိန်မှာ မြင်ကွင်းထဲက ဖြစ်ရပ်ကို တိုတောင်းစွာဖော်ပြပါ"}}]}}"""
+
     inputs = [
         {"type": "video", "uri": getattr(active_file, "uri", uploaded.uri), "mime_type": getattr(active_file, "mime_type", None) or _mime_for(quick_path)},
         {"type": "text", "text": prompt},
@@ -248,7 +284,7 @@ JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ M
         client,
     )
     text = extract_gemini_text(response)
-    bundle = _parse_bundle(text)
+    bundle = _parse_bundle(text, duration)
     bundle["model"] = used_model
     if progress:
         progress(42, f"မြန်မာ recap script ပြီးပါပြီ ({used_model})", started)

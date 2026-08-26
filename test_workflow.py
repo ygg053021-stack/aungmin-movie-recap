@@ -5,9 +5,15 @@ from unittest.mock import patch
 
 from streamlit_app.config import EditorState
 from streamlit_app import pipeline
+from streamlit_app.audio import _atempo_chain
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_atempo_chain_supports_longer_and_shorter_narration(self):
+        self.assertEqual(_atempo_chain(1.0), "anull")
+        self.assertIn("atempo=2.0", _atempo_chain(2.5))
+        self.assertIn("atempo=0.5", _atempo_chain(0.25))
+
     def test_final_render_copies_approved_voice_without_regenerating(self):
         with tempfile.TemporaryDirectory() as root:
             root_path = Path(root)
@@ -27,7 +33,11 @@ class WorkflowTests(unittest.TestCase):
                 seen["voice"] = Path(voice_path).read_bytes()
                 Path(output_path).write_bytes(b"\x00\x00\x00approved-final" + b"x" * 2048)
 
-            with patch.object(pipeline, "probe_duration", side_effect=fake_probe), patch.object(pipeline, "render_mp4", side_effect=fake_render), patch.object(pipeline, "create_voiceover", side_effect=AssertionError("approved voice must not be regenerated")):
+            def fake_fit(input_path, output_path, target_seconds):
+                Path(output_path).write_bytes(Path(input_path).read_bytes())
+                return target_seconds
+
+            with patch.object(pipeline, "probe_duration", side_effect=fake_probe), patch.object(pipeline, "fit_audio_to_duration", side_effect=fake_fit), patch.object(pipeline, "render_mp4", side_effect=fake_render), patch.object(pipeline, "create_voiceover", side_effect=AssertionError("approved voice must not be regenerated")):
                 result = pipeline.render_bundle_to_mp4(
                     str(media),
                     {"recap_bn": "မြန်မာ recap", "subtitle_bn": "စာတန်း"},

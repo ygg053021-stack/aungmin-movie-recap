@@ -54,6 +54,15 @@ class ReferenceStyleTests(unittest.TestCase):
         self.assertEqual(coords, (20, 60, 50, 20))
         self.assertEqual((state.blur_x, state.blur_y, state.blur_w, state.blur_h), coords)
 
+    def test_srt_uses_scene_timestamps_when_available(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "timed.srt"
+            make_srt({"recap_bn": "fallback", "subtitle_bn": "fallback", "segments": [{"start": 0, "end": 3, "text": "ပထမ scene"}, {"start": 8, "end": 12, "text": "နောက် scene"}]}, 12, str(path), mode="Burmese only")
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("00:00:00,000 --> 00:00:03,000", content)
+            self.assertIn("00:00:08,000 --> 00:00:12,000", content)
+            self.assertIn("နောက် scene", content)
+
     def test_srt_is_created_with_burmese_text(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "captions.srt"
