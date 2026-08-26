@@ -231,7 +231,7 @@ with right:
     with tabs[3]:
         st.markdown("**No.3 approved recap ကို အဆုံးသတ်ပြင်ဆင်ရန်**")
         st.markdown('<div class="section-note">ဒီနေရာမှာ No.3 မှာ approve လုပ်ထားတဲ့ Burmese voice + video ကိုပဲ သုံးပါမယ်။ မူရင်းအသံကို ပြန်မထည့်ပါ။ Blur၊ manual subtitle၊ font၊ size၊ position နဲ့ logo ကို preview ကြည့်ပြီး ပြင်ပါမယ်။</div>', unsafe_allow_html=True)
-        selected_font = st.selectbox("Subtitle font / မြန်မာစာတန်းဖောင့်", FONT_PRESETS, index=3, key="subtitle_font")
+        selected_font = st.selectbox("Subtitle font / မြန်မာစာတန်းဖောင့်", FONT_PRESETS, index=FONT_PRESETS.index("Noto Sans Myanmar Regular") if "Noto Sans Myanmar Regular" in FONT_PRESETS else 3, key="subtitle_font")
         editor.subtitle_font = selected_font
         logo_upload = st.file_uploader("Logo upload / လိုဂိုထည့်ရန် (optional)", type=["png", "jpg", "jpeg"], key="logo_upload")
         if logo_upload:
@@ -251,13 +251,14 @@ with right:
         blur_mode = st.selectbox("Blur mode / အုပ်မည့်နည်း", ["Auto default (အောက်ခြေစာတန်း)", "Manual drag (video ပေါ်ရွှေ့ရန်)"], index=0, key="blur_mode", disabled=not blur_enabled)
         editor.blur_strength = st.slider("Blur strength / အုပ်အား", 0, 60, 28, 2, disabled=not blur_enabled) if blur_enabled else 0
         if blur_enabled and blur_mode.startswith("Auto"):
-            editor.blur_x, editor.blur_y, editor.blur_w, editor.blur_h = 5, 72, 90, 18
+            # Cover the full lower subtitle band with a small safety margin.
+            editor.blur_x, editor.blur_y, editor.blur_w, editor.blur_h = 0, 68, 100, 32
         if blur_enabled and blur_mode.startswith("Manual"):
             st.caption("Auto default က အောက်ခြေစာတန်းဧရိယာကို အုပ်ပါသည်။ မတူသောနေရာဖြစ်လျှင် x/y/width/height ကို manual ပြင်ပါ။")
-            editor.blur_x = st.slider("Blur X %", 0, 90, editor.blur_x, 1)
-            editor.blur_y = st.slider("Blur Y %", 0, 90, editor.blur_y, 1)
+            editor.blur_x = st.slider("Blur X %", 0, 95, editor.blur_x, 1)
+            editor.blur_y = st.slider("Blur Y %", 0, 95, editor.blur_y, 1)
             editor.blur_w = st.slider("Blur width %", 5, 100, editor.blur_w, 1)
-            editor.blur_h = st.slider("Blur height %", 5, 60, editor.blur_h, 1)
+            editor.blur_h = st.slider("Blur height %", 5, 80, editor.blur_h, 1)
         editor.subtitle_mode = "Burmese only"
         if st.button("Auto Subtitle · အသံနဲ့ 100% ချိန်ညှိ", type="secondary", use_container_width=True):
             editor.subtitle_auto_sync = True

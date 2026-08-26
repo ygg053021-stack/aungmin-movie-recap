@@ -17,7 +17,7 @@ def extract_preview_frame(media_path: str, width: int = 720, height: int = 405, 
     seek = max(0.0, float(timestamp or 0.0))
     command = [
         ffmpeg, "-hide_banner", "-loglevel", "error", "-ss", f"{seek:.3f}", "-i", media_path,
-        "-frames:v", "1", "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black",
+        "-frames:v", "1", "-vf", f"scale={width}:{height}:force_original_aspect_ratio={'increase' if height > width else 'decrease'},{'crop=' + str(width) + ':' + str(height) if height > width else 'pad=' + str(width) + ':' + str(height) + ':(ow-iw)/2:(oh-ih)/2:black'}",
         "-f", "image2pipe", "-vcodec", "png", "pipe:1",
     ]
     result = subprocess.run(command, capture_output=True, timeout=30)

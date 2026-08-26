@@ -427,3 +427,25 @@
 - [x] Push the verified subtitle correction to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user requested one-click narration-synchronized subtitles, compact wrapping, exact 9:16/16:9 layout, manual positioning/size controls, and selectable text colors/designs.
+
+# Full subtitle-cover blur and exact-format preview — completed
+
+- [x] Expand default/manual blur bounds with safe margins so original subtitles are fully covered
+- [x] Make blur preview and final blur geometry use the exact selected 9:16 or 16:9 output coordinate system
+- [x] Validate preview frame sizing and centering for portrait and landscape modes
+- [x] Add/validate readable Burmese fonts from the supplied font set and keep fallback behavior safe
+- [x] Run blur coverage, font rendering, preview geometry, and render-speed regression tests
+- [x] Push the verified finish-editor correction to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user requested complete removal of original subtitles, exact 9:16/16:9 preview sizing, readable fonts, and no risky slowdown to the existing workflow.
+
+# Full subtitle-cover blur and exact-format preview — completed
+
+- [x] Expand default and manual blur bounds with safe margins so the original subtitle is fully hidden
+- [x] Make blur preview and final blur geometry use the exact selected 9:16 or 16:9 coordinate system
+- [x] Validate centered preview sizing for portrait and landscape modes
+- [x] Add and validate readable Burmese Unicode fonts shown in the supplied reference screenshots
+- [x] Run blur coverage, font rendering, preview geometry, and render-speed regression tests
+- [x] Push the verified finish-editor correction to GitHub main
+
+ရက်စွဲ: 2026-08-26 — user requested complete original-subtitle removal, exact 9:16/16:9 preview sizing, readable fonts, and preservation of the stable render workflow.

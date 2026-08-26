@@ -90,11 +90,13 @@ def _video_graph(source_path: str, srt_path: str | None, effects: EditorState, r
         y = max(0.0, min(0.95, effects.blur_y / 100))
         w = max(0.03, min(1.0 - x, effects.blur_w / 100))
         h = max(0.03, min(1.0 - y, effects.blur_h / 100))
-        radius = max(2, min(30, effects.blur_strength // 2))
+        # Use a strong blur regardless of a small slider value; the region must
+        # hide the original subtitle completely before Burmese text is added.
+        radius = max(12, min(30, int(effects.blur_strength)))
         graph = (
             f"[0:v]{','.join(pre)}[base];"
             f"[base]split=2[clean][blur];"
-            f"[blur]crop=w=iw*{w:.4f}:h=ih*{h:.4f}:x=iw*{x:.4f}:y=ih*{y:.4f},boxblur={radius}:2[blurred];"
+            f"[blur]crop=w=iw*{w:.4f}:h=ih*{h:.4f}:x=iw*{x:.4f}:y=ih*{y:.4f},boxblur={radius}:2,drawbox=x=0:y=0:w=iw:h=ih:color=black@0.16:t=fill[blurred];"
             f"[clean][blurred]overlay=x=main_w*{x:.4f}:y=main_h*{y:.4f}:shortest=1[blurred_base];"
         )
         return graph + (f"[blurred_base]{subtitle}[vbase]" if subtitle else "[blurred_base]null[vbase]")

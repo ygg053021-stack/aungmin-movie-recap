@@ -16,6 +16,10 @@ FONT_FILES = {
     "OT43 YellYint Thin": "OT43_YellYint-Thin.ttf",
     "Pyidaungsu Book Bold": "Pyidaungsu-Book-Bold.ttf",
     "Pyidaungsu Book Regular": "Pyidaungsu-Book-Regular.ttf",
+    "Noto Sans Myanmar Regular": "NotoSansMyanmar-Regular.ttf",
+    "Noto Sans Myanmar Bold": "NotoSansMyanmar-Bold.ttf",
+    "Noto Serif Myanmar Regular": "NotoSerifMyanmar-Regular.ttf",
+    "Noto Serif Myanmar Bold": "NotoSerifMyanmar-Bold.ttf",
     "SM01 WaTokeLay": "SM01_WaTokeLay-Regular.ttf",
     "SM02 KanBaung Regular (4)": "SM02_KanBaung-Regular.ttf",
     "SM02 KanBaung Regular": "SM02_KanBaung-Regular.ttf",
@@ -29,6 +33,10 @@ FONT_FAMILIES = {
     "OT43 YellYint Thin": "OT43_YellYint",
     "Pyidaungsu Book Bold": "Pyidaungsu Book",
     "Pyidaungsu Book Regular": "Pyidaungsu Book",
+    "Noto Sans Myanmar Regular": "Noto Sans Myanmar",
+    "Noto Sans Myanmar Bold": "Noto Sans Myanmar",
+    "Noto Serif Myanmar Regular": "Noto Serif Myanmar",
+    "Noto Serif Myanmar Bold": "Noto Serif Myanmar",
     "SM01 WaTokeLay": "SM01_WaTokeLay",
     "SM02 KanBaung Regular (4)": "SM02_KanBaung",
     "SM02 KanBaung Regular": "SM02_KanBaung",
@@ -68,8 +76,8 @@ class EditorState:
     blur_strength: int = 0
     blur_x: int = 5
     blur_y: int = 72
-    blur_w: int = 90
-    blur_h: int = 18
+    blur_w: int = 100
+    blur_h: int = 28
     subtitle_position: str = "Bottom"
     subtitle_mode: str = "Burmese only"
     subtitle_size: int = 52
