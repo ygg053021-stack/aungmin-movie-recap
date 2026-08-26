@@ -61,6 +61,8 @@ def extract_gemini_text(data: dict) -> str:
 def generate_recap_bundle(api_key: str, source: SourceInfo, media_path: str, style: str, detail: str, speed: float, flipped: bool) -> dict:
     quick_path = prepare_quick_media(media_path)
     file_uri = upload_to_gemini(api_key, quick_path)
+    if not file_uri:
+        raise ValueError("Gemini video upload did not return a file URI. Recap cannot continue.")
     duration = probe_duration(quick_path)
     target = "၅၀၀ မှ ၇၀၀" if duration else "တိုတောင်းပြီး အဓိကအချက်များပါဝင်သည့်"
     prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။

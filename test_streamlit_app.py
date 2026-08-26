@@ -39,6 +39,25 @@ class StreamlitLinkTests(unittest.TestCase):
             text = fetch_public_transcript("https://youtube.com/shorts/pDDohu7oMPU")
         self.assertEqual(text, "David can teleport.\nHe discovers his power.")
 
+    def test_voiceover_writes_and_verifies_audio_file_without_path_symbol(self):
+        import tempfile
+        from pathlib import Path
+        from streamlit_app.audio import create_voiceover
+
+        class FakeCommunicate:
+            def __init__(self, _text, _voice):
+                pass
+
+            async def save(self, path):
+                Path(path).write_bytes(b"fake-audio-output" * 32)
+
+        fake_module = types.SimpleNamespace(Communicate=FakeCommunicate)
+        with tempfile.TemporaryDirectory() as workdir:
+            output = f"{workdir}/voice.mp3"
+            with patch.dict(sys.modules, {"edge_tts": fake_module}):
+                create_voiceover("မြန်မာစာမူ", output, "my-MM-NilarNeural")
+            self.assertGreater(Path(output).stat().st_size, 0)
+
     def test_download_failure_is_reported_as_fallback_error(self):
         class FailingDownloader:
             def __init__(self, options):
