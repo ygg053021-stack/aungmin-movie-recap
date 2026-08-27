@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .audio import create_segmented_voiceover, create_voiceover, fit_audio_to_duration, make_srt
+from .audio import create_segmented_voiceover, create_voiceover, pad_or_trim_audio_to_duration, make_srt
 from .config import EditorState
 from .render import render_mp4
 from .media import probe_duration
@@ -50,7 +50,7 @@ def render_voice_preview(
         raise ValueError("Original video duration ကို မဖတ်နိုင်ပါ။")
     if progress:
         progress(42, f"Narration ကို မူရင်း {source_duration:.1f} စက္ကန့်နဲ့ ချိန်နေသည်", started)
-    fit_audio_to_duration(str(voice_path), str(fitted_voice_path), source_duration)
+    pad_or_trim_audio_to_duration(str(voice_path), str(fitted_voice_path), source_duration)
     if progress:
         progress(55, "မူရင်းအသံကို ဖယ်ပြီး duration တူ recap voice preview ပေါင်းနေသည်", started)
     ratio = {"YouTube": "16:9", "TikTok": "9:16", "Facebook": "1:1"}.get(output_platform, "16:9")
@@ -63,6 +63,7 @@ def render_voice_preview(
         progress(100, "Voice preview အဆင်သင့်ဖြစ်ပါပြီ", started)
     return {
         "voice_path": str(fitted_voice_path),
+        "voice_bytes": fitted_voice_path.read_bytes(),
         "video_bytes": output_path.read_bytes(),
         "source_duration": source_duration,
         "voice_duration": probe_duration(str(fitted_voice_path)),

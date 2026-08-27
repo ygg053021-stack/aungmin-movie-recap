@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 
 from streamlit_app import (
     APP_NAME, EditorState, FONT_FAMILIES, FONT_FILES, FONT_PRESETS, PLATFORMS, RATIOS, SourceInfo, VOICE_NAMES,
-    create_voiceover, fit_audio_to_duration, download_authorized_source, embed_preview_html,
+    create_voiceover, fit_audio_to_duration, pad_or_trim_audio_to_duration, download_authorized_source, embed_preview_html,
     generate_recap_bundle, generate_recap_from_transcript, inspect_source, make_srt, preview_html,
     probe_duration, render_mp4, render_bundle_to_mp4, render_voice_preview, save_uploaded_file, duration_notice,
     validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
@@ -368,12 +368,17 @@ with right:
                                 output_path = str(Path(workdir) / "aungmin-recap.mp4")
                                 duration = probe_duration(st.session_state.media_path)
                                 approved_voice_path = st.session_state.voice_preview.get("voice_path") if st.session_state.voice_preview else None
-                                raw_voice_path = str(Path(workdir) / "voice-raw.mp3")
-                                if approved_voice_path and Path(approved_voice_path).is_file():
-                                    Path(raw_voice_path).write_bytes(Path(approved_voice_path).read_bytes())
+                                approved_voice_bytes = st.session_state.voice_preview.get("voice_bytes") if st.session_state.voice_preview else None
+                                if isinstance(approved_voice_bytes, (bytes, bytearray)) and len(approved_voice_bytes) > 128:
+                                    # Finish is visual editing only: reuse the exact approved No.3 artifact.
+                                    Path(voice_path).write_bytes(bytes(approved_voice_bytes))
                                 else:
-                                    create_voiceover(st.session_state.bundle["recap_bn"], raw_voice_path, voice_name)
-                                fit_audio_to_duration(raw_voice_path, voice_path, duration)
+                                    raw_voice_path = str(Path(workdir) / "voice-raw.mp3")
+                                    if approved_voice_path and Path(approved_voice_path).is_file():
+                                        Path(raw_voice_path).write_bytes(Path(approved_voice_path).read_bytes())
+                                    else:
+                                        create_voiceover(st.session_state.bundle["recap_bn"], raw_voice_path, voice_name)
+                                    pad_or_trim_audio_to_duration(raw_voice_path, voice_path, duration)
                                 voice_duration = probe_duration(voice_path)
                                 subtitle_duration = duration if editor.subtitle_auto_sync else min(duration, voice_duration) if voice_duration > 0 else duration
                                 render_bundle = dict(st.session_state.bundle)

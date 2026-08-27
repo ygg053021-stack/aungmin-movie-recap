@@ -504,3 +504,15 @@
 - [x] Run regression and real MP4 smoke tests, then push the fix to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user reported the live preview appears and disappears, blocking blur and subtitle placement.
+
+# Isolate Finish edits and restore stable Recap Voice — completed
+
+- [x] Trace why Finish reruns can change or recreate the approved Recap Voice state
+- [x] Freeze and reuse the exact approved voice artifact during Finish editing and export
+- [x] Keep narration speaking pace consistent instead of repeatedly changing speed
+- [x] Fit the approved narration to the exact source-video duration without changing the approved voice character
+- [x] Keep live preview visible only before export and remove it from the Finish display after final video is ready
+- [x] Run voice reuse, duration, pace, preview lifecycle, and real MP4 regression tests
+- [x] Push the verified fix to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user reported that Finish-only editing affected Recap Voice and that the preview still flickers.

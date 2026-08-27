@@ -115,6 +115,31 @@ def _atempo_chain(factor: float) -> str:
     return ",".join(filters) or "anull"
 
 
+def pad_or_trim_audio_to_duration(input_path: str, output_path: str, target_seconds: float) -> float:
+    """Match track length without changing speaking tempo or pitch."""
+    from .media import probe_duration
+    import imageio_ffmpeg
+
+    source = Path(input_path)
+    destination = Path(output_path)
+    if not source.is_file():
+        raise ValueError("Voiceover input file မတွေ့ပါ။")
+    target = max(0.5, float(target_seconds or 0.0))
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    command = [
+        ffmpeg, "-y", "-i", str(source),
+        "-filter:a", f"apad,atrim=duration={target:.3f}",
+        "-t", f"{target:.3f}", "-vn", "-c:a", "libmp3lame", "-b:a", "128k", str(destination),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=180)
+    if result.returncode != 0 or not destination.is_file() or destination.stat().st_size < 128:
+        raise ValueError(f"Voice duration padding failed: {result.stderr[-500:]}")
+    measured = probe_duration(str(destination))
+    if measured <= 0:
+        raise ValueError("ချိန်ညှိပြီး voice duration ကို မဖတ်နိုင်ပါ။")
+    return measured
+
+
 def fit_audio_to_duration(input_path: str, output_path: str, target_seconds: float) -> float:
     """Time-stretch narration to target duration and return the measured result.
 
