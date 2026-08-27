@@ -602,3 +602,40 @@
 - [x] Push only the verified changes to GitHub `main`
 
 ရက်စွဲ: 2026-08-27 — user supplied a real reference video and requested end-to-end testing before any GitHub changes.
+
+# Master timeline rebuild — in progress
+
+- [ ] Define a single source-of-truth timeline schema for source scenes, hook, Burmese script, voice segments, word timings, subtitles, and blur tracks
+- [ ] Add scene/shot segmentation and source-frame references before script generation
+- [ ] Add a strict 3-second hook segment with retention-oriented Burmese copy and locked timing
+- [ ] Generate narration per timeline segment while preserving approved text and one stable voice pace
+- [ ] Generate word-level or phrase-level subtitle timings from the approved narration audio
+- [ ] Track original subtitle regions over time for automatic or manually corrected blur masks
+- [ ] Make preview and FFmpeg export consume the same timeline coordinates, fonts, crop, and timing
+- [ ] Add validation gates for script completeness, subtitle visibility, audio/video sync, blur coverage, duration, and final MP4 integrity
+- [ ] Run real reference-video tests and push only after all gates pass
+
+ရက်စွဲ: 2026-08-27 — user requested a detailed master-timeline rebuild plan before implementation.
+
+# New sample recap reference analysis and master timeline redesign — completed
+
+- [x] Analyze `/home/ubuntu/upload/5_6296298622870889566.mp4` metadata, duration, aspect ratio, frame rate, and visible composition
+- [x] Extract measurable voice delivery, accent, pause, speaking-rate, and narration characteristics from the sample
+- [x] Extract Burmese/English subtitle text, font/placement/style, line wrapping, and timing behavior from the sample
+- [x] Identify the sample's opening hook structure and retention-oriented narration pattern
+- [x] Identify blur, logo, watermark, crop, and overlay behavior from the sample
+- [x] Produce an improved reference-driven Master Timeline design based on extracted facts
+- [x] Clearly separate verified observations from uncertain or inaudible content
+
+ရက်စွဲ: 2026-08-27 — user supplied a new sample recap video and requested immediate factual extraction followed by a better design.
+
+# New real-video end-to-end regression request — in progress
+
+- [ ] Read and reconcile `/home/ubuntu/upload/pasted_content.txt` with the newly supplied source video requirements
+- [ ] Run the current app workflow from source through final MP4 using `/home/ubuntu/upload/5_6075551322629742944.mp4`
+- [ ] Verify Burmese/English subtitle visibility, narration timing, script completeness, hook behavior, blur coverage, preview/export parity, and output duration
+- [ ] Fix only failures reproduced by the real test while preserving working stages
+- [ ] Re-run all regression tests and real MP4 smoke tests
+- [ ] Push only the verified final changes to GitHub `main`
+
+ရက်စွဲ: 2026-08-27 — user requested full end-to-end verification before any GitHub update.

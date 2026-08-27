@@ -5,9 +5,9 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .audio import create_voiceover, fit_audio_preserving_script, make_srt, pad_or_trim_audio_to_duration
+from .audio import create_voiceover, fit_audio_preserving_script, make_ass, pad_or_trim_audio_to_duration
 from .config import EditorState
-from .render import render_mp4
+from .render import _output_size, render_mp4
 from .media import probe_duration
 
 
@@ -92,7 +92,7 @@ def render_bundle_to_mp4(
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="aungmin-one-click-") as workdir:
         root = Path(workdir)
-        srt_path = root / "captions.srt"
+        subtitle_path = root / "captions.ass"
         raw_voice_path = root / "voice-raw.mp3"
         voice_path = root / "voice.mp3"
         output_path = root / "aungmin-recap.mp4"
@@ -117,14 +117,34 @@ def render_bundle_to_mp4(
         # The approved voice is fitted to source duration, so captions use the
         # source timeline exactly instead of drifting with raw TTS length.
         voice_duration = probe_duration(str(voice_path))
-        make_srt(bundle, duration, str(srt_path), editor.subtitle_offset, editor.subtitle_mode)
-        if not srt_path.is_file() or srt_path.stat().st_size == 0:
-            raise ValueError("မြန်မာစာတန်းထိုး SRT ဖိုင် မဖန်တီးနိုင်ပါ။")
+        ratio = {"YouTube": "16:9", "TikTok": "9:16", "Facebook": "1:1"}.get(output_platform, "16:9")
+        output_size = _output_size(ratio)
+        subtitle_box = (editor.subtitle_x, editor.subtitle_y, editor.subtitle_w, editor.subtitle_h)
+        font_name = {
+            "Pyidaungsu Book Regular": "Pyidaungsu Book",
+            "Noto Sans Myanmar Regular": "Noto Sans Myanmar",
+            "Noto Serif Myanmar Regular": "Noto Serif Myanmar",
+        }.get(editor.subtitle_font, "Noto Sans Myanmar")
+        # ASS PlayRes is the exact output canvas, so the editor's font-size value
+        # is already an output-pixel value. Do not apply a second width scale.
+        font_size = max(8, min(140, int(round(editor.subtitle_size))))
+        make_ass(
+            bundle,
+            duration,
+            str(subtitle_path),
+            editor.subtitle_offset,
+            editor.subtitle_mode,
+            subtitle_box=subtitle_box,
+            output_size=output_size,
+            font_name=font_name,
+            font_size=font_size,
+        )
+        if not subtitle_path.is_file() or subtitle_path.stat().st_size == 0:
+            raise ValueError("မြန်မာစာတန်းထိုး subtitle ဖိုင် မဖန်တီးနိုင်ပါ။")
 
         if progress:
             progress(55, "1080p / 30 FPS MP4 ပေါင်းနေသည်", started)
-        ratio = {"YouTube": "16:9", "TikTok": "9:16", "Facebook": "1:1"}.get(output_platform, "16:9")
-        render_mp4(media_path, str(srt_path), str(voice_path), str(output_path), editor, ratio, logo_path=logo_path)
+        render_mp4(media_path, str(subtitle_path), str(voice_path), str(output_path), editor, ratio, logo_path=logo_path)
         if not output_path.is_file() or output_path.stat().st_size < 1024:
             raise ValueError("FFmpeg ပြီးသွားသော်လည်း အမှန်တကယ် MP4 output မရပါ။")
         data = output_path.read_bytes()

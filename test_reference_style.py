@@ -98,6 +98,45 @@ class ReferenceStyleTests(unittest.TestCase):
             self.assertIn("00:00:08,000 --> 00:00:12,000", content)
             self.assertIn("နောက် scene", content)
 
+    def test_timed_segments_preserve_burmese_and_english_caption_pair(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "bilingual-timed.srt"
+            make_srt(
+                {
+                    "recap_bn": "fallback",
+                    "subtitle_bn": "ပထမ scene\nနောက် scene",
+                    "subtitle_en": "First scene\nNext scene",
+                    "segments": [
+                        {"start": 0, "end": 3, "text": "ပထမ scene", "text_en": "First scene"},
+                        {"start": 3, "end": 6, "text": "နောက် scene", "text_en": "Next scene"},
+                    ],
+                },
+                6,
+                str(path),
+                mode="Burmese + English",
+            )
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("ပထမ", content)
+            self.assertIn("scene", content)
+            self.assertIn("First", content)
+            self.assertIn("နောက်", content)
+            self.assertIn("Next", content)
+            self.assertIn("00:00:00,000 --> 00:00:03,000", content)
+            self.assertIn("00:00:03,000 --> 00:00:06,000", content)
+
+    def test_timed_subtitles_use_explicit_output_position(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "positioned.srt"
+            make_srt(
+                {"recap_bn": "မြန်မာ", "subtitle_bn": "မြန်မာ", "segments": [{"start": 0, "end": 2, "text": "မြန်မာ"}]},
+                2,
+                str(path),
+                mode="Burmese only",
+                subtitle_box=(8, 76, 84, 16),
+                output_size=(1080, 1920),
+            )
+            self.assertIn("{\\an5\\pos(539,1612)}", path.read_text(encoding="utf-8"))
+
     def test_srt_is_created_with_burmese_text(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "captions.srt"

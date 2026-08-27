@@ -29,3 +29,25 @@ This file is a reference for real render verification, not an instruction to cha
 The current 9:16 app-level Finish branch produced a valid 1080x1920, 30 fps H.264/AAC MP4 with a measured duration of 44.070 seconds and a non-zero file size. The real output frame preserved the full-height portrait scene and applied the selected lower blur band without showing a blank preview. The current 16:9 pipeline branch also produced a valid 1920x1080, 30 fps H.264/AAC MP4 with the same measured 44.070-second duration. Because the source is portrait, the landscape output correctly uses a centered portrait image with black side padding rather than distorting the scene.
 
 These results verify the media path and geometry for this supplied file. They do not claim that an automatically generated Burmese script is factually perfect; that remains dependent on the selected AI analysis and the user's script approval step.
+
+
+## New end-to-end regression findings
+
+The newly supplied source is 576x768 portrait, 30 FPS, AAC stereo, with an exact duration of 44.071383 seconds. The current pipeline produced a valid 1080x1920, 30 FPS MP4 with matching 44.070-second duration and valid H.264/AAC streams.
+
+The visual regression exposed a real subtitle failure: both the app-generated final frame and a direct FFmpeg frame using the generated SRT showed the blurred lower region but no Burmese/English recap subtitle panel. The generated SRT contained Burmese timed segments only because `make_srt()` used the timed-segment branch and did not pair each timed segment with `subtitle_en`. This is a reproduced implementation bug, not a source-video issue. The direct filter test also confirms that the output geometry and blur composition render, isolating the remaining failure to subtitle content/style placement and bilingual timed-caption construction rather than MP4 encoding.
+
+
+## Subtitle filter isolation
+
+A direct FFmpeg test with a simple English SRT and the default subtitle style rendered the text successfully. A second test with `Alignment=7` and `MarginV=1400` rendered no test text because that top-left ASS alignment placed the event outside the intended visible caption area for the filtered portrait composition. A minimal custom style rendered large text, but its placement overlapped the existing reference-style panel. The current production failure therefore has two separate causes: timed segments did not carry English paired captions, and the ASS `Alignment=7`/percentage-to-`MarginV` mapping is not a valid way to represent a y-position intended as a percentage of the output canvas. The correct fix must use a bottom/center anchored ASS layout or explicit ASS positioning (`\\pos`/per-event style) derived from the same normalized panel geometry, rather than passing a top margin as `MarginV`.
+
+
+## Explicit position follow-up
+
+After adding explicit `\\pos` tags and `original_size=1080x1920`, the final MP4 does show Burmese text, but the text is dramatically oversized and begins near the top instead of sitting inside the intended subtitle panel. A direct FFmpeg test confirms the same behavior. This indicates that the bundled libass script resolution is not matching the output canvas; output-pixel coordinates and font sizes cannot be passed directly as ASS coordinates. The fix must convert output coordinates and font size into the actual ASS PlayRes coordinate system, or use a rasterized Pillow subtitle layer at output resolution. The earlier no-caption issue is fixed, but the visual parity issue remains reproduced and is not ready to mark complete.
+
+
+## Final ASS render verification
+
+The final ASS pipeline renders visible Burmese and English captions inside the shared subtitle panel. Portrait output is 1080x1920 and landscape output is 1920x1080; both preserve the 44.070-second source duration at 30 FPS with H.264 video and AAC audio. The portrait frame shows Burmese in yellow with black outline and English in white below it. The landscape frame preserves the same normalized subtitle panel and positions the portrait source with black side padding rather than stretching it. The 27-test unittest suite passes after the final caption changes.

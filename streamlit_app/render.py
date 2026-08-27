@@ -48,9 +48,14 @@ def _subtitle_filter(srt_path: str, effects: EditorState, output_width: int = 19
     outline = _ass_color(getattr(effects, "subtitle_outline", "#000000"), 0)
     background_alpha = 255 - max(0, min(255, int(getattr(effects, "subtitle_background_opacity", 0) * 2.55)))
     background = _ass_color(getattr(effects, "subtitle_background", "#000000"), background_alpha)
-    border_style = 3 if getattr(effects, "subtitle_background_opacity", 0) > 0 else 1
-    style = f"FontName={font},FontSize={size},PrimaryColour={fill},OutlineColour={outline},BackColour={background},BorderStyle={border_style},Outline=3,Shadow=1,Alignment=7,MarginL={margin_l},MarginV={margin_v},MarginR={margin_r}"
-    return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':force_style='{style}'"
+    if Path(srt_path).suffix.lower() == ".ass":
+        return f"ass='{safe_path}':fontsdir='{fonts_dir}'"
+    # The subtitle panel is drawn as a separate video layer. ASS BorderStyle=3
+    # creates a black rectangle per wrapped line, which is not the reference look
+    # and can cover the source frame. Keep ASS text transparent and let the panel
+    # use the full normalized subtitle box.
+    style = f"FontName={font},FontSize={size},PrimaryColour={fill},OutlineColour={outline},BackColour=&HFF000000,BorderStyle=1,Outline=3,Shadow=1,Alignment=7,MarginL=0,MarginV=0,MarginR=0"
+    return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':original_size={output_width}x{output_height}:force_style='{style}'"
 
 
 def _prepare_watermark_png(text: str, font_path: str, font_size: int, output_path: str) -> str:
@@ -84,7 +89,17 @@ def _video_graph(source_path: str, srt_path: str | None, effects: EditorState, r
     # Aspect-ratio crop is already included above for portrait outputs.
     if effects.speed != 1.0:
         pre.append(f"setpts=PTS/{max(0.25, min(4.0, effects.speed))}")
-    subtitle = _subtitle_filter(srt_path, effects, width, height) if getattr(effects, "subtitle_enabled", True) and srt_path and Path(srt_path).is_file() and Path(srt_path).stat().st_size > 0 else ""
+    subtitle_enabled = getattr(effects, "subtitle_enabled", True) and srt_path and Path(srt_path).is_file() and Path(srt_path).stat().st_size > 0
+    subtitle = _subtitle_filter(srt_path, effects, width, height) if subtitle_enabled else ""
+    subtitle_panel = ""
+    if subtitle_enabled and getattr(effects, "subtitle_background_opacity", 0) > 0:
+        panel_x = max(0.0, min(0.95, effects.subtitle_x / 100))
+        panel_y = max(0.0, min(0.95, effects.subtitle_y / 100))
+        panel_w = max(0.03, min(1.0 - panel_x, effects.subtitle_w / 100))
+        panel_h = max(0.03, min(1.0 - panel_y, effects.subtitle_h / 100))
+        panel_alpha = max(0.0, min(1.0, effects.subtitle_background_opacity / 100))
+        subtitle_panel = f"drawbox=x=iw*{panel_x:.4f}:y=ih*{panel_y:.4f}:w=iw*{panel_w:.4f}:h=ih*{panel_h:.4f}:color=black@{panel_alpha:.3f}:t=fill"
+    subtitle_chain = ",".join(filter(None, (subtitle_panel, subtitle)))
     if (getattr(effects, "blur_enabled", False) or effects.blur_strength > 0) and effects.blur_strength > 0:
         x = max(0.0, min(0.95, effects.blur_x / 100))
         y = max(0.0, min(0.95, effects.blur_y / 100))
@@ -99,8 +114,8 @@ def _video_graph(source_path: str, srt_path: str | None, effects: EditorState, r
             f"[blur]crop=w=iw*{w:.4f}:h=ih*{h:.4f}:x=iw*{x:.4f}:y=ih*{y:.4f},boxblur={radius}:2,drawbox=x=0:y=0:w=iw:h=ih:color=black@0.16:t=fill[blurred];"
             f"[clean][blurred]overlay=x=main_w*{x:.4f}:y=main_h*{y:.4f}:shortest=1[blurred_base];"
         )
-        return graph + (f"[blurred_base]{subtitle}[vbase]" if subtitle else "[blurred_base]null[vbase]")
-    return f"[0:v]{','.join(pre + ([subtitle] if subtitle else []))}[vbase]"
+        return graph + (f"[blurred_base]{subtitle_chain}[vbase]" if subtitle_chain else "[blurred_base]null[vbase]")
+    return f"[0:v]{','.join(pre + ([subtitle_chain] if subtitle_chain else []))}[vbase]"
 
 
 def render_mp4(source_path: str, srt_path: str | None, voice_path: str | None, output_path: str, effects: EditorState, ratio: str, music_path: str | None = None, target_width: int = 1920, target_height: int = 1080, target_fps: int = 30, logo_path: str | None = None) -> None:

@@ -60,13 +60,23 @@ def caption_for_time(bundle: dict, timestamp: float, duration: float, mode: str 
     return units[min(len(units) - 1, int(position * len(units)))]
 
 
-def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode: str = "Burmese + English", max_chars: int = 22) -> None:
+def make_srt(
+    bundle: dict,
+    duration: float,
+    path: str,
+    offset: float = 0.0,
+    mode: str = "Burmese + English",
+    max_chars: int = 22,
+    subtitle_box: tuple[float, float, float, float] | None = None,
+    output_size: tuple[int, int] | None = None,
+) -> None:
     lines = caption_units(bundle, mode, max_chars)
     duration = max(1.0, float(duration or len(lines) * 4))
+    en = [line.strip() for line in bundle.get("subtitle_en", "").splitlines() if line.strip()]
     raw_segments = bundle.get("segments")
     timed_segments = []
     if isinstance(raw_segments, list):
-        for item in raw_segments:
+        for segment_index, item in enumerate(raw_segments):
             if not isinstance(item, dict) or not str(item.get("text", "")).strip():
                 continue
             try:
@@ -75,7 +85,23 @@ def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode
             except (TypeError, ValueError):
                 continue
             if end_value > start_value:
-                timed_segments.append((max(0.0, start_value + offset), min(duration, end_value + offset), str(item["text"]).strip()))
+                burmese = str(item.get("text", "")).strip()
+                english = ""
+                if mode == "Burmese + English":
+                    english = str(item.get("text_en", "")).strip()
+                    if not english and segment_index < len(en):
+                        english = en[segment_index]
+                elif mode == "English only":
+                    english = str(item.get("text_en", "")).strip() or (en[segment_index] if segment_index < len(en) else "")
+                    burmese = english or burmese
+                caption = wrap_caption(burmese, max_chars)
+                if mode == "Burmese + English" and english:
+                    caption = f"{{\\1c&H0000F2FF&}}{caption}\n{{\\1c&H00FFFFFF&}}{wrap_caption(english, max_chars)}"
+                elif mode == "Burmese + English":
+                    caption = f"{{\\1c&H0000F2FF&}}{caption}"
+                elif mode == "English only":
+                    caption = f"{{\\1c&H00FFFFFF&}}{wrap_caption(english or burmese, max_chars)}"
+                timed_segments.append((max(0.0, start_value + offset), min(duration, end_value + offset), caption))
     with open(path, "w", encoding="utf-8") as handle:
         entries = timed_segments or [
             (max(0.0, (index - 1) * duration / len(lines) + offset),
@@ -87,7 +113,69 @@ def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode
             # Never truncate approved subtitle text; timing and line wrapping are
             # handled before this point so the SRT retains the complete content.
             caption = wrap_caption(line, max_chars)
+            if subtitle_box and output_size:
+                box_x, box_y, _box_w, _box_h = subtitle_box
+                output_width, output_height = output_size
+                x = max(0, min(output_width - 1, int(round(float(box_x) / 100 * output_width))))
+                y = max(0, min(output_height - 1, int(round(float(box_y) / 100 * output_height))))
+                box_width = max(1, int(round(float(_box_w) / 100 * output_width)))
+                box_height = max(1, int(round(float(_box_h) / 100 * output_height)))
+                caption = f"{{\\an5\\pos({x + box_width // 2},{y + box_height // 2})}}{caption}"
             handle.write(f"{index}\n{stamp(start)} --> {stamp(end)}\n{caption}\n\n")
+
+
+def make_ass(
+    bundle: dict,
+    duration: float,
+    path: str,
+    offset: float = 0.0,
+    mode: str = "Burmese + English",
+    max_chars: int = 22,
+    subtitle_box: tuple[float, float, float, float] | None = None,
+    output_size: tuple[int, int] | None = None,
+    font_name: str = "Noto Sans Myanmar",
+    font_size: int = 52,
+    fill: str = "&H0000F2FF",
+    outline: str = "&H00000000",
+    outline_width: int = 3,
+) -> None:
+    """Write an ASS subtitle file whose PlayRes is exactly the output canvas."""
+    from tempfile import TemporaryDirectory
+
+    output_width, output_height = output_size or (1920, 1080)
+    with TemporaryDirectory(prefix="aungmin-ass-") as temp_dir:
+        srt_path = Path(temp_dir) / "captions.srt"
+        make_srt(bundle, duration, str(srt_path), offset, mode, max_chars, subtitle_box, output_size)
+        blocks = [block.strip() for block in srt_path.read_text(encoding="utf-8").split("\n\n") if block.strip()]
+        events: list[str] = []
+        for block in blocks:
+            rows = block.splitlines()
+            if len(rows) < 3 or "-->" not in rows[1]:
+                continue
+            start_raw, end_raw = [value.strip() for value in rows[1].split("-->", 1)]
+            def ass_time(raw: str) -> str:
+                hours, minutes, seconds = raw.replace(",", ".").split(":")
+                return f"{int(hours)}:{int(minutes):02d}:{float(seconds):05.2f}"
+            text = r"\N".join(rows[2:])
+            events.append(f"Dialogue: 0,{ass_time(start_raw)},{ass_time(end_raw)},Default,,0,0,0,,{text}")
+
+    ass = "\n".join(
+        [
+            "[Script Info]",
+            "ScriptType: v4.00+",
+            f"PlayResX: {output_width}",
+            f"PlayResY: {output_height}",
+            "ScaledBorderAndShadow: yes",
+            "[V4+ Styles]",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+            f"Style: Default,{font_name},{max(8, min(140, int(font_size)))},{fill},&H000000FF,{outline},&HFF000000,0,0,0,0,100,100,0,0,1,{max(0, min(12, int(outline_width)))},1,7,0,0,0,1",
+            "[Events]",
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+            *events,
+            "",
+        ]
+    )
+    Path(path).write_text(ass, encoding="utf-8")
 
 
 def create_voiceover(script: str, path: str, voice_name: str) -> None:

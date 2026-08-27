@@ -205,7 +205,11 @@ def _normalize_segments(raw: Any, duration: float | None = None) -> list[dict[st
             end = min(end, limit)
         if end - start < 0.5:
             continue
-        normalized.append({"start": start, "end": end, "text": text_value[:1200]})
+        segment = {"start": start, "end": end, "text": text_value[:1200]}
+        english_value = str(item.get("text_en", "")).strip()
+        if english_value:
+            segment["text_en"] = english_value[:1200]
+        normalized.append(segment)
     normalized.sort(key=lambda segment: (float(segment["start"]), float(segment["end"])))
     return normalized
 
@@ -264,8 +268,8 @@ def generate_recap_bundle(
 
 မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ **မြင်ကွင်းဖြစ်စဉ်အလိုက် အစမှအဆုံး မကျော်ဘဲ ရေးပါ**။ Scene အသစ်တိုင်းမှာ အဲဒီ scene ရဲ့ လုပ်ဆောင်ချက်ကို အရင်ပြောပြီး နောက်မှ အဓိပ္ပာယ်/ရလဒ်ကို ပြောပါ။ မြန်မြန်ကျော်သွားတဲ့ scene များကို စကားရှည်မရေးပါနှင့်။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ **Target length သည် {target} မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ {duration_text} ထက် စောပြီးမပြီး၊ ပိုပြီးမရှည်အောင် ရေးပါ။ အပိုအကြောင်းအရာ/နိဂုံးချုပ် filler မထည့်ပါနှင့်။** Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
 
-JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ Markdown မသုံးပါနှင့်။ JSON key နှစ်ခုကို အောက်ပါအတိုင်း တိတိကျကျသုံးပါ:
-{{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မြန်မာစာတန်းထိုးရန် စာမူ","segments":[{{"start":0,"end":8,"text":"အဲဒီအချိန်မှာ မြင်ကွင်းထဲက ဖြစ်ရပ်ကို တိုတောင်းစွာဖော်ပြပါ"}}]}}"""
+JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ Markdown မသုံးပါနှင့်။ JSON key များကို အောက်ပါအတိုင်း တိတိကျကျသုံးပါ။ `segments` ထဲက segment တိုင်းတွင် Burmese `text` နှင့် အဓိပ္ပာယ်တူ English `text_en` ကို မဖြစ်မနေထည့်ပါ။ `text_en` သည် Burmese narration ကို တိုက်ရိုက်ဘာသာပြန်ထားခြင်းဖြစ်ပြီး စာကြောင်းအလယ်မှာ မဖြတ်ပါနှင့်။
+{{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မြန်မာစာတန်းထိုးရန် စာမူ","subtitle_en":"English translation စာမူ","segments":[{{"start":0,"end":3,"text":"ပထမ ၃ စက္ကန့်အတွက် Burmese hook","text_en":"English translation of the hook"}}]}}"""
 
     inputs = [
         {"type": "video", "uri": getattr(active_file, "uri", uploaded.uri), "mime_type": getattr(active_file, "mime_type", None) or _mime_for(quick_path)},
