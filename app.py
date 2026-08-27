@@ -320,7 +320,10 @@ with right:
                     max_preview_chars = 22 if ratio == "9:16" else 34 if ratio == "16:9" else 28
                     preview_text = caption_for_time(preview_bundle, preview_time, source_duration, editor.subtitle_mode, max_preview_chars) if preview_bundle else ""
                     logo_path = st.session_state.get("logo_path")
-                    canvas_key = f"finish_overlay_canvas_{ratio}_{canvas_width}x{canvas_height}_{round(preview_time, 1)}_{editor.subtitle_font}_{editor.subtitle_size}_{editor.subtitle_fill}_{editor.subtitle_design}_{editor.subtitle_enabled}_{editor.subtitle_x}_{editor.subtitle_y}_{editor.subtitle_w}_{editor.subtitle_h}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_enabled}_{editor.blur_strength}_{editor.blur_x}_{editor.blur_y}_{editor.blur_w}_{editor.blur_h}"
+                    # Keep the canvas identity stable while dragging. Coordinates belong to
+                    # the drawable state, not the widget key; including them remounted the
+                    # component after every pointer event and made the preview disappear.
+                    canvas_key = f"finish_overlay_canvas_{ratio}_{canvas_width}x{canvas_height}_{round(preview_time, 1)}_{editor.subtitle_font}_{editor.subtitle_size}_{editor.subtitle_fill}_{editor.subtitle_design}_{editor.subtitle_enabled}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_enabled}_{editor.blur_strength}"
                     canvas_kwargs = dict(
                         fill_color="rgba(0, 0, 0, 0.58)", stroke_width=3, stroke_color="#70e8d8",
                         background_image=frame, update_streamlit=True, height=canvas_height, width=canvas_width,

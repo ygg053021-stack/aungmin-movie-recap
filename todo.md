@@ -493,3 +493,14 @@
 - [x] Push the verified restructuring to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user instructed to implement the compact grouped UI and final-output-position preview exactly.
+
+# Persistent live preview fix — completed
+
+- [x] Prevent the live preview canvas from disappearing during Streamlit reruns
+- [x] Keep the preview host in the final-output area while controls are changed
+- [x] Separate timestamp/frame refresh from overlay canvas identity so edits are not reset
+- [x] Persist blur and subtitle positions after drag/resize interactions
+- [x] Verify stable 9:16 and 16:9 preview behavior with real source frames
+- [x] Run regression and real MP4 smoke tests, then push the fix to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user reported the live preview appears and disappears, blocking blur and subtitle placement.
