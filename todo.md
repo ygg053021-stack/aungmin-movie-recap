@@ -548,3 +548,13 @@
 - [x] Push the verified subtitle geometry correction to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user reported preview is correct but final export subtitle size/position and blur placement still differ.
+
+# Live subtitle size parity correction — completed
+
+- [x] Trace why the selected subtitle-size slider value does not visibly resize the preview text
+- [x] Bind slider size to the persistent preview text object without remounting the canvas
+- [x] Map preview font size to the exact 9:16/16:9 output-canvas font size used by FFmpeg
+- [x] Verify size, wrapping, position, blur, and font parity in real MP4 outputs
+- [x] Push the verified correction to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user reported subtitle size does not change as selected in preview and final export does not match.

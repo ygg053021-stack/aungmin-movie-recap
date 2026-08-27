@@ -80,7 +80,9 @@ def canvas_initial_drawing(state: EditorState, width: int, height: int, subtitle
             "selectable": True, "hasControls": True, "lockRotation": True,
         })
     if getattr(state, "subtitle_enabled", True) and subtitle.strip():
-        font_size = max(16, min(42, int(state.subtitle_size * min(width / 1920, height / 1080) * 1.35)))
+        # Match the export-side ASS formula, then scale it into the preview canvas.
+        # Do not clamp to 16: that made 9:16 slider changes appear frozen.
+        font_size = max(8, min(72, int(round(state.subtitle_size * width / 1920 * 1.35))))
         max_chars = max(10, min(24, int(width / max(font_size * 0.58, 1))))
         subtitle_text = _compact_canvas_text(subtitle[:180], max_chars)
         objects.append({
@@ -151,7 +153,12 @@ def sync_overlays_from_canvas(state: EditorState, json_data: str | None, width: 
             state.subtitle_y = round(top * 100 / height)
             state.subtitle_w = max(5, min(100, round(obj_width * 100 / width)))
             state.subtitle_h = max(5, min(80, round(obj_height * 100 / height)))
-            state.subtitle_size = max(18, min(96, round(float(obj.get("fontSize", state.subtitle_size)) * 1080 / height)))
+            # Fabric stores the visible size as fontSize * scaleY. Convert that
+            # preview size back to the same output-relative slider units used by
+            # the FFmpeg/ASS renderer, so moving the slider is not overwritten
+            # by the canvas rerun.
+            effective_font_size = float(obj.get("fontSize", 0) or 0) * scale_y
+            state.subtitle_size = max(18, min(96, round(effective_font_size * 1920 / width / 1.35)))
         elif name == "watermark":
             state.watermark_x = round(left * 100 / width)
             state.watermark_y = round(top * 100 / height)

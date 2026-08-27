@@ -35,7 +35,9 @@ def _subtitle_filter(srt_path: str, effects: EditorState, output_width: int = 19
     # Fabric preview scales from the selected output canvas. Use the same
     # output-relative font size and top-left anchor in FFmpeg/ASS so a drag in
     # preview lands at the same place in the final MP4.
-    size = max(16, min(140, int(round(getattr(effects, "subtitle_size", 52) * output_width / 1920 * 1.35))))
+    # Keep the same output-relative size formula as the Fabric preview.
+    # A 16px floor made 9:16 sizes collapse to one visible size.
+    size = max(8, min(140, int(round(getattr(effects, "subtitle_size", 52) * output_width / 1920 * 1.35))))
     custom_x = max(0, min(99, int(getattr(effects, "subtitle_x", 8))))
     custom_y = max(0, min(99, int(getattr(effects, "subtitle_y", 78))))
     margin_l = int(round(custom_x * output_width / 100))
