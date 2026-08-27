@@ -27,29 +27,25 @@ def _ass_color(value: str, alpha: int = 0) -> str:
     return f"&H{max(0, min(255, int(alpha))):02X}{bb}{gg}{rr}"
 
 
-def _subtitle_filter(srt_path: str, effects: EditorState) -> str:
+def _subtitle_filter(srt_path: str, effects: EditorState, output_width: int = 1920, output_height: int = 1080) -> str:
     safe_path = srt_path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
     selected = getattr(effects, "subtitle_font", "Pyidaungsu Book Regular") or "Pyidaungsu Book Regular"
     font = FONT_FAMILIES.get(selected, "Pyidaungsu Book").replace("'", "")
     fonts_dir = (Path(__file__).resolve().parent.parent / "fonts").as_posix().replace("'", "\\'")
-    size = max(24, min(96, int(getattr(effects, "subtitle_size", 52))))
-    position = getattr(effects, "subtitle_position", "Bottom")
-    custom_x = int(getattr(effects, "subtitle_x", 8))
-    custom_y = int(getattr(effects, "subtitle_y", 78))
-    center_x = custom_x + int(getattr(effects, "subtitle_w", 84)) / 2
-    center_y = custom_y + int(getattr(effects, "subtitle_h", 16)) / 2
-    horizontal = "left" if center_x < 33 else ("right" if center_x > 66 else "center")
-    vertical = "top" if center_y < 33 else ("bottom" if center_y > 66 else "center")
-    alignment = {("left", "top"): 7, ("center", "top"): 8, ("right", "top"): 9,
-                 ("left", "center"): 4, ("center", "center"): 5, ("right", "center"): 6,
-                 ("left", "bottom"): 1, ("center", "bottom"): 2, ("right", "bottom"): 3}[(horizontal, vertical)]
-    margin = max(20, int((100 - min(100, custom_y + int(getattr(effects, "subtitle_h", 16)))) * 8))
+    # Fabric preview scales from the selected output canvas. Use the same
+    # output-relative font size and top-left anchor in FFmpeg/ASS so a drag in
+    # preview lands at the same place in the final MP4.
+    size = max(16, min(140, int(round(getattr(effects, "subtitle_size", 52) * output_width / 1920 * 1.35))))
+    custom_x = max(0, min(99, int(getattr(effects, "subtitle_x", 8))))
+    custom_y = max(0, min(99, int(getattr(effects, "subtitle_y", 78))))
+    margin_l = int(round(custom_x * output_width / 100))
+    margin_v = int(round(custom_y * output_height / 100))
     fill = _ass_color(getattr(effects, "subtitle_fill", "#FFF200"), 0)
     outline = _ass_color(getattr(effects, "subtitle_outline", "#000000"), 0)
     background_alpha = 255 - max(0, min(255, int(getattr(effects, "subtitle_background_opacity", 0) * 2.55)))
     background = _ass_color(getattr(effects, "subtitle_background", "#000000"), background_alpha)
     border_style = 3 if getattr(effects, "subtitle_background_opacity", 0) > 0 else 1
-    style = f"FontName={font},FontSize={size},PrimaryColour={fill},OutlineColour={outline},BackColour={background},BorderStyle={border_style},Outline=3,Shadow=1,Alignment={alignment},MarginV={margin}"
+    style = f"FontName={font},FontSize={size},PrimaryColour={fill},OutlineColour={outline},BackColour={background},BorderStyle={border_style},Outline=3,Shadow=1,Alignment=7,MarginL={margin_l},MarginV={margin_v},MarginR=20"
     return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':force_style='{style}'"
 
 
@@ -84,7 +80,7 @@ def _video_graph(source_path: str, srt_path: str | None, effects: EditorState, r
     # Aspect-ratio crop is already included above for portrait outputs.
     if effects.speed != 1.0:
         pre.append(f"setpts=PTS/{max(0.25, min(4.0, effects.speed))}")
-    subtitle = _subtitle_filter(srt_path, effects) if getattr(effects, "subtitle_enabled", True) and srt_path and Path(srt_path).is_file() and Path(srt_path).stat().st_size > 0 else ""
+    subtitle = _subtitle_filter(srt_path, effects, width, height) if getattr(effects, "subtitle_enabled", True) and srt_path and Path(srt_path).is_file() and Path(srt_path).stat().st_size > 0 else ""
     if getattr(effects, "blur_enabled", effects.blur_strength > 0) and effects.blur_strength > 0:
         x = max(0.0, min(0.95, effects.blur_x / 100))
         y = max(0.0, min(0.95, effects.blur_y / 100))

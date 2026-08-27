@@ -538,3 +538,13 @@
 - [x] Push the verified audio and overlay parity correction to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user reported that the preview is stable but final recap audio/text/blur/position still differ and requested exact video review.
+
+# Final subtitle geometry correction — completed
+
+- [x] Use output-canvas-relative font size in FFmpeg matching the floating preview scale
+- [x] Use the same top-left subtitle anchor and margins in preview and export
+- [x] Verify blur and subtitle coordinate transforms after final crop/scale
+- [x] Run 9:16 and 16:9 real MP4 geometry smoke tests
+- [x] Push the verified subtitle geometry correction to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user reported preview is correct but final export subtitle size/position and blur placement still differ.
