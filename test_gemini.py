@@ -111,7 +111,7 @@ class GeminiRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "English subtitle translation"):
             gemini._validate_full_length_bundle(
                 {
-                    "recap_bn": "က" * 700,
+                    "recap_bn": "က" * 900,
                     "segments": [{"start": 0, "end": 15, "text": "scene", "text_en": "Scene"}, {"start": 15, "end": 30, "text": "scene 2", "text_en": "Scene 2"}, {"start": 30, "end": 45, "text": "scene 3", "text_en": "Scene 3"}, {"start": 45, "end": 60, "text": "scene 4"}],
                 },
                 60.0,

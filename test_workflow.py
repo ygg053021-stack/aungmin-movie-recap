@@ -44,8 +44,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(editor.subtitle_enabled)
         self.assertEqual(editor.subtitle_mode, "Burmese + English")
         self.assertTrue(editor.blur_enabled)
-        self.assertEqual((editor.blur_x, editor.blur_y, editor.blur_w, editor.blur_h), (0, 68, 100, 32))
+        self.assertEqual((editor.blur_x, editor.blur_y, editor.blur_w, editor.blur_h), (4, 76, 92, 18))
         self.assertEqual(editor.subtitle_fill, "#FFF200")
+        self.assertEqual(editor.subtitle_background_opacity, 0)
 
     def test_short_recap_bundle_is_rejected_before_tts(self):
         with self.assertRaisesRegex(ValueError, "တိုလွန်း"):
@@ -59,7 +60,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_full_length_bundle_requires_scene_coverage(self):
         bundle = {
-            "recap_bn": "က" * 650,
+            "recap_bn": "က" * 900,
             "segments": [
                 {"start": 0, "end": 20, "text": "က" * 120, "text_en": "A"},
                 {"start": 20, "end": 40, "text": "က" * 120, "text_en": "B"},

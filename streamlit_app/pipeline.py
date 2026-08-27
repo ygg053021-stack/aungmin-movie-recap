@@ -25,20 +25,23 @@ def apply_automatic_recap_defaults(editor: EditorState) -> EditorState:
     editor.subtitle_mode = "Burmese + English"
     editor.subtitle_font = "Noto Sans Myanmar Regular"
     editor.subtitle_x = 6
-    editor.subtitle_y = 70
+    editor.subtitle_y = 76
     editor.subtitle_w = 88
-    editor.subtitle_h = 20
+    editor.subtitle_h = 18
     editor.subtitle_size = 42
     editor.subtitle_fill = "#FFF200"
     editor.subtitle_outline = "#000000"
     editor.subtitle_background = "#000000"
-    editor.subtitle_background_opacity = 58
+    # The reference uses outline/drop-shadow readability, not a solid caption box.
+    editor.subtitle_background_opacity = 0
     editor.blur_enabled = True
     editor.blur_strength = 28
-    editor.blur_x = 0
-    editor.blur_y = 68
-    editor.blur_w = 100
-    editor.blur_h = 32
+    # Keep auto blur focused on the likely original-caption band instead of
+    # obscuring the full lower third of the movie frame.
+    editor.blur_x = 4
+    editor.blur_y = 76
+    editor.blur_w = 92
+    editor.blur_h = 18
     return editor
 
 

@@ -265,7 +265,10 @@ def _validate_full_length_bundle(bundle: dict, duration: float | None) -> None:
     if not duration or duration < 15:
         return
     recap = re.sub(r"\s+", "", str(bundle.get("recap_bn", "")))
-    minimum_chars = max(280, int(float(duration) * 10.0))
+    # The supplied reference is a dense recap (about 19 non-space Burmese
+    # characters/second). Keep a strong lower bound so one-click narration does
+    # not become a short summary, while leaving TTS room for natural punctuation.
+    minimum_chars = max(420, int(float(duration) * 13.5))
     if len(recap) < minimum_chars:
         raise ValueError(
             f"Recap script တိုလွန်းပါသည် ({len(recap)} characters)။ "
@@ -307,13 +310,14 @@ def generate_recap_bundle(
     # Request a genuinely full-length recap: Burmese codepoint counts are only a
     # planning heuristic, so the post-parse guard below also rejects clearly short
     # bundles instead of silently padding them with long empty gaps.
-    target_chars = max(360, int(duration * 11.5)) if duration else 700
-    minimum_chars = max(280, int(duration * 10.0)) if duration else 560
+    # Match the supplied reference's energetic, high-density recap cadence.
+    target_chars = max(520, int(duration * 16.5)) if duration else 900
+    minimum_chars = max(420, int(duration * 13.5)) if duration else 720
     target = f"{max(minimum_chars, target_chars - 55)} မှ {target_chars + 55}"
     duration_text = f"{duration:.1f} စက္ကန့်" if duration else "မသိရသေးသောကြာချိန်"
     prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပြီး **{duration_text} အတွင်း အစအဆုံးကို အဓိပ္ပာယ်ရှိစွာ ဖုံးလွှမ်းမည့် full-length narration** ကိုရေးပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။
 
-မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ **Video ရဲ့ ပထမ 3 seconds ကို သီးခြားစိတ်ဝင်စားစရာ hook အဖြစ် စတင်ပြီး၊ အဲဒီနောက် scene တစ်ခုချင်းစီရဲ့ လုပ်ဆောင်ချက်၊ တုံ့ပြန်မှု၊ အကြောင်းရင်းနဲ့ ရလဒ်ကို အစမှအဆုံး မကျော်ဘဲ အသေးစိတ်ဖော်ပြပါ။** Video အစ၊ အလယ်၊ အဆုံး ဘယ်အပိုင်းကိုမှ စာကြောင်းတိုနဲ့ ကျော်မသွားပါနှင့်။ Scene အသစ်တိုင်းမှာ အဲဒီ scene ရဲ့ လုပ်ဆောင်ချက်ကို အရင်ပြောပြီး နောက်မှ အဓိပ္ပာယ်/ရလဒ်ကို ပြောပါ။ မြန်မြန်ကျော်သွားတဲ့ scene များကိုလည်း အနည်းဆုံး အဓိက action နဲ့ reaction ပါအောင် ရေးပါ။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ **Target length သည် {target} မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ အနည်းဆုံး {minimum_chars} non-space မြန်မာစာလုံး မပြည့်လျှင် output ကို မပြီးသေးဟု သတ်မှတ်ပြီး ပိုမိုအသေးစိတ် scene coverage ထပ်ရေးပါ။ {duration_text} ထက် စောပြီးမပြီး၊ ပိုပြီးမရှည်အောင် ရေးပါ။ အပိုအကြောင်းအရာ/နိဂုံးချုပ် filler မထည့်ပါနှင့်။** Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
+မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ **Video ရဲ့ ပထမ 3 seconds ကို သီးခြားစိတ်ဝင်စားစရာ hook အဖြစ် စတင်ပြီး၊ အဲဒီနောက် scene တစ်ခုချင်းစီရဲ့ လုပ်ဆောင်ချက်၊ တုံ့ပြန်မှု၊ အကြောင်းရင်းနဲ့ ရလဒ်ကို အစမှအဆုံး မကျော်ဘဲ အသေးစိတ်ဖော်ပြပါ။** Video အစ၊ အလယ်၊ အဆုံး ဘယ်အပိုင်းကိုမှ စာကြောင်းတိုနဲ့ ကျော်မသွားပါနှင့်။ Scene အသစ်တိုင်းမှာ အဲဒီ scene ရဲ့ လုပ်ဆောင်ချက်ကို အရင်ပြောပြီး နောက်မှ အဓိပ္ပာယ်/ရလဒ်ကို ပြောပါ။ မြန်မြန်ကျော်သွားတဲ့ scene များကိုလည်း အနည်းဆုံး အဓိက action နဲ့ reaction ပါအောင် ရေးပါ။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ **Target length သည် {target} မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ ပေးထားသော sample recap လို မြန်မာ narration ကို အလွတ်နေရာရှည်ရှည်မထားဘဲ scene action/reaction/dialogue အဓိပ္ပာယ်များဖြင့် သိပ်သည်းစွာရေးပါ။ အနည်းဆုံး {minimum_chars} non-space မြန်မာစာလုံး မပြည့်လျှင် output ကို မပြီးသေးဟု သတ်မှတ်ပြီး ပိုမိုအသေးစိတ် scene coverage ထပ်ရေးပါ။ {duration_text} ထက် စောပြီးမပြီး၊ ပိုပြီးမရှည်အောင် ရေးပါ။ အပိုအကြောင်းအရာ/နိဂုံးချုပ် filler မထည့်ပါနှင့်။** Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
 
 **segments ကို မဖြစ်မနေ ပြန်ပေးပါ။** အနည်းဆုံး scene ၈ ခု သို့မဟုတ် video duration ၈ စက္ကန့်လျှင် တစ်ခုနှုန်းနီးပါး ခွဲပြီး၊ segment တိုင်းမှာ source `start`/`end` seconds၊ မြန်မာ narration `text` နဲ့ အဓိပ္ပာယ်တူ `text_en` ပါရမည်။ Segments ရဲ့ စုစုပေါင်းအချိန်က video ရဲ့ အနည်းဆုံး 90% ကို ဖုံးလွှမ်းရမည်။
 

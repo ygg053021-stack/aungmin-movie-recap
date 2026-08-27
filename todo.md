@@ -703,3 +703,11 @@
 - [x] Preserve compact bilingual line groups without a second wrap or subtitle event drift
 - [x] Verify audio activity, subtitle events, and source frames at multiple timestamps in a real render
 - [x] Run the expanded regression suite and push the precision refinement to GitHub main
+
+# Sample-video style rebuild — verified
+
+- [x] Analyze the supplied reference video for exact scene cadence, narration density, subtitle timing, bilingual layout, and output framing
+- [x] Document the user-required one-click result as a precise master-timeline specification
+- [x] Rebuild the workflow code against the reference specification without breaking manual controls
+- [x] Render and inspect the supplied reference video and project sample at multiple timestamps
+- [x] Run regression tests and push the verified sample-style rebuild to GitHub main
