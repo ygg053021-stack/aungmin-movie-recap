@@ -591,3 +591,14 @@
 - [x] Run real 9:16/16:9 reference-style regression tests and push to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user approved implementation after providing two reference videos.
+
+# Supplied reference video end-to-end verification — completed
+
+- [x] Inspect `/home/ubuntu/upload/5_6075551322629742944.mp4` duration, dimensions, audio, frames, and visible subtitle/layout behavior
+- [x] Run the current Streamlit pipeline against the supplied video and capture the first real failure
+- [x] Fix only verified blockers without changing the approved voice workflow or stable features
+- [x] Add/update regression tests for the observed failure and final MP4 validation
+- [x] Verify preview/export geometry, script completeness, stable narration pace, duration alignment, and final MP4 output
+- [x] Push only the verified changes to GitHub `main`
+
+ရက်စွဲ: 2026-08-27 — user supplied a real reference video and requested end-to-end testing before any GitHub changes.

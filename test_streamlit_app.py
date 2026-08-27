@@ -44,9 +44,11 @@ class StreamlitLinkTests(unittest.TestCase):
         from pathlib import Path
         from streamlit_app.audio import create_voiceover
 
+        seen = {}
+
         class FakeCommunicate:
-            def __init__(self, _text, _voice):
-                pass
+            def __init__(self, text, _voice):
+                seen["text"] = text
 
             async def save(self, path):
                 Path(path).write_bytes(b"fake-audio-output" * 32)
@@ -55,8 +57,10 @@ class StreamlitLinkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as workdir:
             output = f"{workdir}/voice.mp3"
             with patch.dict(sys.modules, {"edge_tts": fake_module}):
-                create_voiceover("မြန်မာစာမူ", output, "my-MM-NilarNeural")
+                script = "မြန်မာစာမူ " * 3000
+                create_voiceover(script, output, "my-MM-NilarNeural")
             self.assertGreater(Path(output).stat().st_size, 0)
+            self.assertEqual(seen["text"], script)
 
     def test_download_failure_is_reported_as_fallback_error(self):
         class FailingDownloader:

@@ -369,43 +369,49 @@ with right:
                     st.error("Transcript recap script ရပါပြီ။ Final MP4 render အတွက် authorized video file ကို upload လုပ်ပါ။")
                 else:
                     st.session_state.final_video = None
-                    with st.spinner("No.3 approved Burmese voice၊ subtitles၊ effects နဲ့ 1080p/30fps MP4 ပေါင်းနေသည်…"):
-                        try:
-                            with tempfile.TemporaryDirectory() as workdir:
-                                srt_path = str(Path(workdir) / "captions.srt")
-                                voice_path = str(Path(workdir) / "voice.mp3")
-                                output_path = str(Path(workdir) / "aungmin-recap.mp4")
-                                duration = probe_duration(st.session_state.media_path)
-                                approved_voice_path = st.session_state.voice_preview.get("voice_path") if st.session_state.voice_preview else None
-                                approved_voice_bytes = st.session_state.voice_preview.get("voice_bytes") if st.session_state.voice_preview else None
-                                if isinstance(approved_voice_bytes, (bytes, bytearray)) and len(approved_voice_bytes) > 128:
-                                    # Finish is visual editing only: reuse the exact approved No.3 artifact.
-                                    Path(voice_path).write_bytes(bytes(approved_voice_bytes))
-                                else:
-                                    raw_voice_path = str(Path(workdir) / "voice-raw.mp3")
-                                    if approved_voice_path and Path(approved_voice_path).is_file():
-                                        Path(raw_voice_path).write_bytes(Path(approved_voice_path).read_bytes())
-                                    else:
-                                        create_voiceover(st.session_state.bundle["recap_bn"], raw_voice_path, voice_name)
-                                    pad_or_trim_audio_to_duration(raw_voice_path, voice_path, duration)
-                                voice_duration = probe_duration(voice_path)
-                                subtitle_duration = duration if editor.subtitle_auto_sync else min(duration, voice_duration) if voice_duration > 0 else duration
-                                render_bundle = dict(st.session_state.bundle)
-                                manual_text = st.session_state.get("manual_subtitle", "").strip()
-                                if manual_text:
-                                    render_bundle["subtitle_bn"] = manual_text
-                                subtitle_max_chars = 22 if RATIOS[output_platform] == "9:16" else 34 if RATIOS[output_platform] == "16:9" else 28
-                                make_srt(render_bundle, subtitle_duration, srt_path, editor.subtitle_offset, editor.subtitle_mode, max_chars=subtitle_max_chars)
-                                render_mp4(st.session_state.media_path, srt_path, voice_path, output_path, editor, RATIOS[output_platform], music_path, logo_path=st.session_state.get("logo_path"))
-                                output_file = Path(output_path)
-                                if not output_file.is_file() or output_file.stat().st_size < 1024:
-                                    raise ValueError("Final MP4 was not created. Nothing is available to download.")
-                                st.session_state.final_video = output_file.read_bytes()
-                            st.success("Final MP4 ready. Final recap preview ကို ပြန်ဖွင့်နေပါတယ်…")
-                            st.rerun()
-                        except (ValueError, ImportError, OSError) as exc:
-                            st.session_state.final_video = None
-                            st.error(f"Render မပြီးသေးပါ: {exc}")
+                    render_progress = st.progress(0, text="Final recap render ပြင်ဆင်နေသည်…")
+                    render_timing = st.empty()
+                    render_started = time.monotonic()
+                    try:
+                        approved_voice_path = st.session_state.voice_preview.get("voice_path") if st.session_state.voice_preview else None
+                        approved_voice_bytes = st.session_state.voice_preview.get("voice_bytes") if st.session_state.voice_preview else None
+                        approved_voice_file = Path(tempfile.gettempdir()) / "aungmin-approved-voice-for-finish.mp3"
+                        if isinstance(approved_voice_bytes, (bytes, bytearray)) and len(approved_voice_bytes) > 128:
+                            approved_voice_file.write_bytes(bytes(approved_voice_bytes))
+                        elif approved_voice_path and Path(approved_voice_path).is_file():
+                            approved_voice_file.write_bytes(Path(approved_voice_path).read_bytes())
+                        else:
+                            raise ValueError("No.3 မှာ approve လုပ်ထားသော voice ဖိုင်ကို မတွေ့ပါ။ Voice preview ကို ပြန်ထုတ်ပြီး approve လုပ်ပါ။")
+
+                        render_bundle = dict(st.session_state.bundle)
+                        manual_text = st.session_state.get("manual_subtitle", "").strip()
+                        if manual_text:
+                            render_bundle["subtitle_bn"] = manual_text
+
+                        def update_render_progress(percent: int, message: str, pipeline_started: float) -> None:
+                            render_progress.progress(min(99, max(5, percent)), text=f"{message}…")
+                            render_timing.caption(f"ကြာချိန်: {time.monotonic() - render_started:.0f} စက္ကန့်")
+
+                        final_bytes = render_bundle_to_mp4(
+                            st.session_state.media_path,
+                            render_bundle,
+                            voice_name,
+                            editor,
+                            output_platform,
+                            progress=update_render_progress,
+                            logo_path=st.session_state.get("logo_path"),
+                            approved_voice_path=str(approved_voice_file),
+                        )
+                        st.session_state.final_video = final_bytes
+                        render_progress.progress(100, text="Final MP4 အဆင်သင့်ဖြစ်ပါပြီ")
+                        render_timing.caption(f"စုစုပေါင်းကြာချိန်: {time.monotonic() - render_started:.0f} စက္ကန့်")
+                        st.success("Final MP4 ready. Final recap preview ကို ပြန်ဖွင့်နေပါတယ်…")
+                        st.rerun()
+                    except (ValueError, ImportError, OSError) as exc:
+                        render_progress.empty()
+                        render_timing.empty()
+                        st.session_state.final_video = None
+                        st.error(f"Render မပြီးသေးပါ: {exc}")
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="info" style="margin-top:.5rem;text-align:center">Use only media you own or have permission to process. Editing transformations do not remove copyright; provider access and download behavior depend on platform rules.</div>', unsafe_allow_html=True)

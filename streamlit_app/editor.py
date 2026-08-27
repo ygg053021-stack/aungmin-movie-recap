@@ -56,7 +56,7 @@ def add_preview_subtitle(frame, subtitle: str, font_path: str | None, size: int,
     except Exception:
         font = ImageFont.load_default()
     draw = ImageDraw.Draw(image)
-    text = _wrap_preview_text(draw, subtitle.strip()[:160], font, int(image.width * 0.86))
+    text = _wrap_preview_text(draw, subtitle.strip(), font, int(image.width * 0.86))
     box = draw.multiline_textbbox((0, 0), text, font=font, stroke_width=2, spacing=4, align="center")
     text_w, text_h = box[2] - box[0], box[3] - box[1]
     x = max(8, (image.width - text_w) // 2)
@@ -73,7 +73,7 @@ def canvas_initial_drawing(state: EditorState, width: int, height: int, subtitle
     x, y = state.blur_x * width / 100, state.blur_y * height / 100
     w, h = state.blur_w * width / 100, state.blur_h * height / 100
     objects = []
-    if getattr(state, "blur_enabled", state.blur_strength > 0) and state.blur_strength > 0:
+    if (getattr(state, "blur_enabled", False) or state.blur_strength > 0) and state.blur_strength > 0:
         objects.append({
             "type": "rect", "name": "blur", "left": x, "top": y, "width": w, "height": h,
             "fill": "rgba(0,0,0,0.58)", "stroke": "#70e8d8", "strokeWidth": 3,
@@ -84,10 +84,11 @@ def canvas_initial_drawing(state: EditorState, width: int, height: int, subtitle
         # Do not clamp to 16: that made 9:16 slider changes appear frozen.
         font_size = max(8, min(72, int(round(state.subtitle_size * width / 1920 * 1.35))))
         max_chars = max(10, min(24, int(width / max(font_size * 0.58, 1))))
-        subtitle_text = _compact_canvas_text(subtitle[:180], max_chars)
+        # Keep all approved subtitle content; only wrap it for the visible canvas.
+        subtitle_text = _compact_canvas_text(subtitle, max_chars)
         objects.append({
-            "type": "i-text", "name": "subtitle", "left": width * 0.08, "top": height * state.subtitle_y / 100,
-            "width": width * 0.84, "text": subtitle_text, "fontSize": font_size,
+            "type": "i-text", "name": "subtitle", "left": width * state.subtitle_x / 100, "top": height * state.subtitle_y / 100,
+            "width": max(24, width * state.subtitle_w / 100), "text": subtitle_text, "fontSize": font_size,
             "fontFamily": font_family or "sans-serif", "fill": getattr(state, "subtitle_fill", "#FFF200"), "stroke": getattr(state, "subtitle_outline", "#000000"), "strokeWidth": 1,
             "backgroundColor": getattr(state, "subtitle_background", "#000000") if getattr(state, "subtitle_background_opacity", 0) > 0 else "transparent",
             "textAlign": "center", "paintFirst": "stroke", "selectable": True, "evented": True, "hasControls": True,

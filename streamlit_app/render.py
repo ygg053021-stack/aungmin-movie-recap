@@ -42,12 +42,14 @@ def _subtitle_filter(srt_path: str, effects: EditorState, output_width: int = 19
     custom_y = max(0, min(99, int(getattr(effects, "subtitle_y", 78))))
     margin_l = int(round(custom_x * output_width / 100))
     margin_v = int(round(custom_y * output_height / 100))
+    custom_w = max(5, min(100 - custom_x, int(getattr(effects, "subtitle_w", 84))))
+    margin_r = max(0, output_width - margin_l - int(round(custom_w * output_width / 100)))
     fill = _ass_color(getattr(effects, "subtitle_fill", "#FFF200"), 0)
     outline = _ass_color(getattr(effects, "subtitle_outline", "#000000"), 0)
     background_alpha = 255 - max(0, min(255, int(getattr(effects, "subtitle_background_opacity", 0) * 2.55)))
     background = _ass_color(getattr(effects, "subtitle_background", "#000000"), background_alpha)
     border_style = 3 if getattr(effects, "subtitle_background_opacity", 0) > 0 else 1
-    style = f"FontName={font},FontSize={size},PrimaryColour={fill},OutlineColour={outline},BackColour={background},BorderStyle={border_style},Outline=3,Shadow=1,Alignment=7,MarginL={margin_l},MarginV={margin_v},MarginR=20"
+    style = f"FontName={font},FontSize={size},PrimaryColour={fill},OutlineColour={outline},BackColour={background},BorderStyle={border_style},Outline=3,Shadow=1,Alignment=7,MarginL={margin_l},MarginV={margin_v},MarginR={margin_r}"
     return f"subtitles='{safe_path}':fontsdir='{fonts_dir}':force_style='{style}'"
 
 
@@ -83,7 +85,7 @@ def _video_graph(source_path: str, srt_path: str | None, effects: EditorState, r
     if effects.speed != 1.0:
         pre.append(f"setpts=PTS/{max(0.25, min(4.0, effects.speed))}")
     subtitle = _subtitle_filter(srt_path, effects, width, height) if getattr(effects, "subtitle_enabled", True) and srt_path and Path(srt_path).is_file() and Path(srt_path).stat().st_size > 0 else ""
-    if getattr(effects, "blur_enabled", effects.blur_strength > 0) and effects.blur_strength > 0:
+    if (getattr(effects, "blur_enabled", False) or effects.blur_strength > 0) and effects.blur_strength > 0:
         x = max(0.0, min(0.95, effects.blur_x / 100))
         y = max(0.0, min(0.95, effects.blur_y / 100))
         w = max(0.03, min(1.0 - x, effects.blur_w / 100))

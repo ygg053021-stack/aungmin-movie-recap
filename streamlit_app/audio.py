@@ -24,12 +24,16 @@ def wrap_caption(text: str, max_chars: int = 22) -> str:
             current = candidate
     if current:
         lines.append(current.strip())
-    return "\n".join(lines[:3])
+    return "\n".join(lines)
 
 
 def stamp(seconds: float) -> str:
-    total = max(0, int(seconds))
-    return f"00:{total // 60:02d}:{total % 60:02d},000"
+    """Format a timestamp with millisecond precision for faithful subtitle timing."""
+    total_ms = max(0, int(round(float(seconds or 0.0) * 1000)))
+    hours, remainder = divmod(total_ms, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    whole_seconds, milliseconds = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{whole_seconds:02d},{milliseconds:03d}"
 
 
 def caption_units(bundle: dict, mode: str = "Burmese + English", max_chars: int = 22) -> list[str]:
@@ -80,7 +84,9 @@ def make_srt(bundle: dict, duration: float, path: str, offset: float = 0.0, mode
             for index, line in enumerate(lines, 1)
         ]
         for index, (start, end, line) in enumerate(entries, 1):
-            caption = line[:440]
+            # Never truncate approved subtitle text; timing and line wrapping are
+            # handled before this point so the SRT retains the complete content.
+            caption = wrap_caption(line, max_chars)
             handle.write(f"{index}\n{stamp(start)} --> {stamp(end)}\n{caption}\n\n")
 
 
@@ -89,7 +95,9 @@ def create_voiceover(script: str, path: str, voice_name: str) -> None:
         import edge_tts
 
         async def save_audio() -> None:
-            await asyncio.wait_for(edge_tts.Communicate(script[:8000], voice_name).save(path), timeout=120)
+            # Do not slice approved text: silent truncation makes the narration
+            # disagree with the script and leaves the final story incomplete.
+            await asyncio.wait_for(edge_tts.Communicate(script, voice_name).save(path), timeout=120)
 
         asyncio.run(save_audio())
         if not os.path.isfile(path) or os.path.getsize(path) < 128:
