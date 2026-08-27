@@ -132,7 +132,9 @@ def make_srt(
         for index, (start, end, line) in enumerate(entries, 1):
             # Never truncate approved subtitle text; timing and line wrapping are
             # handled before this point so the SRT retains the complete content.
-            caption = wrap_caption(line, max_chars)
+            # Timed bilingual chunks are already wrapped. Re-wrapping them here
+            # would flatten the scene chunk and create an extra tall caption block.
+            caption = line if timed_segments else wrap_caption(line, max_chars)
             if subtitle_box and output_size:
                 box_x, box_y, _box_w, _box_h = subtitle_box
                 output_width, output_height = output_size
@@ -349,7 +351,9 @@ def create_segmented_voiceover(segments: list[dict], path: str, voice_name: str,
             raw = root / f"segment-{index:03d}-raw.mp3"
             fit = root / f"segment-{index:03d}.mp3"
             create_voiceover(text, str(raw), voice_name)
-            fit_audio_to_duration(str(raw), str(fit), end - start)
+            # Keep the same voice pace policy for every scene. Short clips are
+            # padded; long clips may only use the bounded uniform speed adjustment.
+            fit_audio_preserving_script(str(raw), str(fit), end - start, max_speed_delta=0.18)
             clip_paths.append((start, fit))
 
         if not clip_paths:

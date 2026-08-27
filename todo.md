@@ -688,3 +688,10 @@
 - [x] Run the complete regression suite and push only verified code to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user requested removal of hard limits, sample-style compact subtitle lines, and working manual preview controls.
+
+# Latest synchronization repair — pending
+
+- [x] Reconcile one-click narration, scene segments, and Burmese/English subtitle events on one master timeline
+- [x] Ensure narration duration and subtitle timing are derived from the same approved scene schedule without skipped or duplicated content
+- [x] Verify sample output at multiple timestamps for visual scene, narration segment, and subtitle alignment
+- [x] Run regression and real-render checks before updating GitHub main

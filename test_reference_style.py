@@ -137,6 +137,29 @@ class ReferenceStyleTests(unittest.TestCase):
             self.assertIn("00:00:00,000 --> 00:00:03,000", content)
             self.assertIn("00:00:03,000 --> 00:00:06,000", content)
 
+    def test_master_timeline_keeps_scene_window_and_compact_bilingual_events(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "master-timeline.srt"
+            make_srt(
+                {
+                    "recap_bn": "fallback",
+                    "segments": [{
+                        "start": 10,
+                        "end": 20,
+                        "text": "စော်ကားတာကသူတို့ဘဝရဲ့အကြီးမားဆုံးဖြစ်လာပါတော့တယ်ကောင်မလေးနဲ့ထမင်းစားနေတုန်း",
+                        "text_en": "Insulting this man became the biggest mistake of their lives while he was eating with his girlfriend.",
+                    }],
+                },
+                30,
+                str(path),
+                mode="Burmese + English",
+                max_chars=32,
+            )
+            blocks = [block for block in path.read_text(encoding="utf-8").split("\n\n") if block.strip()]
+            self.assertGreaterEqual(len(blocks), 2)
+            self.assertTrue(all("00:00:10," <= block.splitlines()[1].split(" --> ")[0] < "00:00:20," for block in blocks))
+            self.assertTrue(all(len(block.splitlines()[2:]) <= 6 for block in blocks))
+
     def test_timed_subtitles_use_explicit_output_position(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "positioned.srt"

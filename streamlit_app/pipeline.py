@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .audio import create_voiceover, fit_audio_preserving_script, make_ass, pad_or_trim_audio_to_duration
+from .audio import create_segmented_voiceover, create_voiceover, fit_audio_preserving_script, make_ass, pad_or_trim_audio_to_duration
 from .config import EditorState
 from .render import _output_size, render_mp4
 from .media import probe_duration
@@ -104,10 +104,18 @@ def render_voice_preview(
     source_duration = probe_duration(media_path)
     if source_duration <= 0:
         raise ValueError("Original video duration ကို မဖတ်နိုင်ပါ။")
-    create_voiceover(recap, str(voice_path), voice_name)
-    if progress:
-        progress(42, f"Narration ကို မူရင်း {source_duration:.1f} စက္ကန့်နဲ့ pace မပြောင်းဘဲ ချိန်နေသည်", started)
-    fit_audio_preserving_script(str(voice_path), str(fitted_voice_path), source_duration)
+    segments = bundle.get("segments")
+    valid_segments = [item for item in segments if isinstance(item, dict) and str(item.get("text", "")).strip()] if isinstance(segments, list) else []
+    if valid_segments:
+        # Build narration from the same scene windows used by subtitles. Each clip
+        # is placed on the source timeline, so voice, action, and captions share
+        # one schedule instead of relying on one globally stretched narration.
+        create_segmented_voiceover(valid_segments, str(fitted_voice_path), voice_name, source_duration)
+    else:
+        create_voiceover(recap, str(voice_path), voice_name)
+        if progress:
+            progress(42, f"Narration ကို မူရင်း {source_duration:.1f} စက္ကန့်နဲ့ pace မပြောင်းဘဲ ချိန်နေသည်", started)
+        fit_audio_preserving_script(str(voice_path), str(fitted_voice_path), source_duration)
     if progress:
         progress(55, "မူရင်းအသံကို ဖယ်ပြီး duration တူ recap voice preview ပေါင်းနေသည်", started)
     ratio = {"YouTube": "16:9", "TikTok": "9:16", "Facebook": "1:1"}.get(output_platform, "16:9")
@@ -166,12 +174,22 @@ def render_bundle_to_mp4(
         if approved_voice_path and Path(approved_voice_path).is_file():
             raw_voice_path.write_bytes(Path(approved_voice_path).read_bytes())
         else:
-            create_voiceover(recap, str(raw_voice_path), voice_name)
+            segments = bundle.get("segments")
+            valid_segments = [item for item in segments if isinstance(item, dict) and str(item.get("text", "")).strip()] if isinstance(segments, list) else []
+            if valid_segments:
+                create_segmented_voiceover(valid_segments, str(raw_voice_path), voice_name, duration)
+            else:
+                create_voiceover(recap, str(raw_voice_path), voice_name)
         if not raw_voice_path.is_file() or raw_voice_path.stat().st_size < 1024:
             raise ValueError("မြန်မာအသံဖိုင် မဖန်တီးနိုင်ပါ။")
         if progress:
-            progress(40, f"Narration ကို မူရင်း {duration:.1f} စက္ကန့်နဲ့ ချိန်နေသည်", started)
-        fit_audio_preserving_script(str(raw_voice_path), str(voice_path), duration)
+            progress(40, f"Narration ကို scene timeline အတိုင်း မူရင်း {duration:.1f} စက္ကန့်နဲ့ ချိန်နေသည်", started)
+        # Segmented voice is already source-duration; continuous fallback uses one
+        # bounded uniform fit so it never drops approved narration text.
+        if isinstance(bundle.get("segments"), list) and any(isinstance(item, dict) and str(item.get("text", "")).strip() for item in bundle.get("segments", [])):
+            voice_path.write_bytes(raw_voice_path.read_bytes())
+        else:
+            fit_audio_preserving_script(str(raw_voice_path), str(voice_path), duration)
 
         # The approved voice is fitted to source duration, so captions use the
         # source timeline exactly instead of drifting with raw TTS length.
