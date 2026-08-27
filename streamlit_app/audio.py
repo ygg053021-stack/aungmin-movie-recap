@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 
 
-def wrap_caption(text: str, max_chars: int = 22) -> str:
+def wrap_caption(text: str, max_chars: int = 32) -> str:
     """Keep Burmese captions compact enough for portrait and landscape output."""
     compact = " ".join(str(text or "").replace("\n", " ").split())
     if len(compact) <= max_chars:
@@ -36,7 +36,7 @@ def stamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{whole_seconds:02d},{milliseconds:03d}"
 
 
-def caption_units(bundle: dict, mode: str = "Burmese + English", max_chars: int = 22) -> list[str]:
+def caption_units(bundle: dict, mode: str = "Burmese + English", max_chars: int = 32) -> list[str]:
     bn = [line.strip() for line in bundle.get("subtitle_bn", "").splitlines() if line.strip()]
     en = [line.strip() for line in bundle.get("subtitle_en", "").splitlines() if line.strip()]
     recap = [line.strip() for line in bundle.get("recap_bn", "").splitlines() if line.strip()]
@@ -54,10 +54,32 @@ def caption_units(bundle: dict, mode: str = "Burmese + English", max_chars: int 
     return units or ["AungMin Movie Recap"]
 
 
-def caption_for_time(bundle: dict, timestamp: float, duration: float, mode: str = "Burmese + English", max_chars: int = 22) -> str:
+def caption_for_time(bundle: dict, timestamp: float, duration: float, mode: str = "Burmese + English", max_chars: int = 32) -> str:
     units = caption_units(bundle, mode, max_chars)
     position = max(0.0, min(0.999999, float(timestamp or 0.0) / max(1.0, float(duration or 1.0))))
     return units[min(len(units) - 1, int(position * len(units)))]
+
+
+def _timed_caption_chunks(burmese: str, english: str, mode: str, max_chars: int) -> list[str]:
+    """Keep each bilingual caption event compact without dropping text."""
+    bn_lines = wrap_caption(burmese, max_chars).splitlines() if burmese else []
+    en_lines = wrap_caption(english, max_chars).splitlines() if english else []
+    if mode == "English only":
+        return ["\n".join(en_lines[i:i + 3]) for i in range(0, len(en_lines), 3)] or ["\n".join(bn_lines[:3])]
+    if mode == "Burmese only":
+        return ["\n".join(bn_lines[i:i + 3]) for i in range(0, len(bn_lines), 3)] or ["AungMin Movie Recap"]
+    count = max((len(bn_lines) + 2) // 3, (len(en_lines) + 2) // 3, 1)
+    chunks: list[str] = []
+    for index in range(count):
+        bn_chunk = "\n".join(bn_lines[index * 3:(index + 1) * 3])
+        en_chunk = "\n".join(en_lines[index * 3:(index + 1) * 3])
+        if bn_chunk and en_chunk:
+            chunks.append(f"{{\\1c&H0000F2FF&}}{bn_chunk}\n{{\\1c&H00FFFFFF&}}{en_chunk}")
+        elif bn_chunk:
+            chunks.append(f"{{\\1c&H0000F2FF&}}{bn_chunk}")
+        elif en_chunk:
+            chunks.append(f"{{\\1c&H00FFFFFF&}}{en_chunk}")
+    return chunks or ["AungMin Movie Recap"]
 
 
 def make_srt(
@@ -66,7 +88,7 @@ def make_srt(
     path: str,
     offset: float = 0.0,
     mode: str = "Burmese + English",
-    max_chars: int = 22,
+    max_chars: int = 32,
     subtitle_box: tuple[float, float, float, float] | None = None,
     output_size: tuple[int, int] | None = None,
 ) -> None:
@@ -94,14 +116,12 @@ def make_srt(
                 elif mode == "English only":
                     english = str(item.get("text_en", "")).strip() or (en[segment_index] if segment_index < len(en) else "")
                     burmese = english or burmese
-                caption = wrap_caption(burmese, max_chars)
-                if mode == "Burmese + English" and english:
-                    caption = f"{{\\1c&H0000F2FF&}}{caption}\n{{\\1c&H00FFFFFF&}}{wrap_caption(english, max_chars)}"
-                elif mode == "Burmese + English":
-                    caption = f"{{\\1c&H0000F2FF&}}{caption}"
-                elif mode == "English only":
-                    caption = f"{{\\1c&H00FFFFFF&}}{wrap_caption(english or burmese, max_chars)}"
-                timed_segments.append((max(0.0, start_value + offset), min(duration, end_value + offset), caption))
+                chunks = _timed_caption_chunks(burmese, english, mode, max_chars)
+                chunk_duration = max(0.1, (end_value - start_value) / len(chunks))
+                for chunk_index, caption in enumerate(chunks):
+                    chunk_start = start_value + chunk_index * chunk_duration + offset
+                    chunk_end = min(end_value + offset, start_value + (chunk_index + 1) * chunk_duration + offset)
+                    timed_segments.append((max(0.0, chunk_start), max(chunk_start + 0.05, chunk_end), caption))
     with open(path, "w", encoding="utf-8") as handle:
         entries = timed_segments or [
             (max(0.0, (index - 1) * duration / len(lines) + offset),
@@ -130,7 +150,7 @@ def make_ass(
     path: str,
     offset: float = 0.0,
     mode: str = "Burmese + English",
-    max_chars: int = 22,
+    max_chars: int = 32,
     subtitle_box: tuple[float, float, float, float] | None = None,
     output_size: tuple[int, int] | None = None,
     font_name: str = "Noto Sans Myanmar",

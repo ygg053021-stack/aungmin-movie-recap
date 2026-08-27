@@ -23,6 +23,7 @@ def apply_automatic_recap_defaults(editor: EditorState) -> EditorState:
     """
     editor.subtitle_enabled = True
     editor.subtitle_mode = "Burmese + English"
+    editor.subtitle_font = "Noto Sans Myanmar Regular"
     editor.subtitle_x = 6
     editor.subtitle_y = 70
     editor.subtitle_w = 88
@@ -186,12 +187,18 @@ def render_bundle_to_mp4(
         # ASS PlayRes is the exact output canvas, so the editor's font-size value
         # is already an output-pixel value. Do not apply a second width scale.
         font_size = max(8, min(140, int(round(editor.subtitle_size))))
+        # Keep captions compact inside the selected output frame. Burmese glyphs
+        # are wider than Latin characters, so derive wrapping from the actual
+        # subtitle box rather than a fixed character count.
+        subtitle_text_width = max(240, int(output_size[0] * max(5, editor.subtitle_w) / 100))
+        max_chars = max(18, min(56, int(subtitle_text_width / max(font_size * 0.52, 1))))
         make_ass(
             bundle,
             duration,
             str(subtitle_path),
             editor.subtitle_offset,
             editor.subtitle_mode,
+            max_chars=max_chars,
             subtitle_box=subtitle_box,
             output_size=output_size,
             font_name=font_name,
