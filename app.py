@@ -16,18 +16,20 @@ from streamlit_app import (
 from streamlit_app.audio import caption_for_time
 from streamlit_app.editor import add_preview_subtitle, extract_preview_frame, sync_blur_from_canvas, sync_overlays_from_canvas, canvas_initial_drawing
 
-st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
 <style>
 :root{color-scheme:dark}
-[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 82% 0%,rgba(24,82,92,.42),transparent 32%),radial-gradient(circle at 10% 46%,rgba(63,24,100,.46),transparent 35%),#070a14}
-[data-testid="stHeader"]{background:rgba(5,7,16,.72)}
+[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 88% 0%,rgba(116,18,35,.22),transparent 30%),radial-gradient(circle at 8% 48%,rgba(40,24,72,.46),transparent 38%),#08090d}
+[data-testid="stHeader"]{background:rgba(5,6,10,.88)}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#111318,#090a0e);border-right:1px solid rgba(255,255,255,.12)}
 .block-container{max-width:1540px;padding:.65rem clamp(.8rem,2.3vw,2.5rem) 1.4rem;overflow:visible}
-.brandbar{height:42px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.13);color:#f4f6ff;font-weight:800;letter-spacing:-.03em}
-.brandbar small{color:#8de8db;font-size:.64rem;letter-spacing:.16em;text-transform:uppercase}
+.brandbar{height:52px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.13);color:#f4f6ff;font-weight:800;letter-spacing:-.03em}
+.brandbar small{color:#f05a67;font-size:.64rem;letter-spacing:.16em;text-transform:uppercase}
+.brandbar .trial{display:inline-flex;align-items:center;gap:.35rem;color:#ff6974;background:rgba(224,47,65,.12);border:1px solid rgba(240,90,103,.38);padding:.28rem .52rem;border-radius:999px;font-size:.62rem;letter-spacing:.12em}
 .workspace{padding-top:.7rem}
-.panel{background:linear-gradient(145deg,rgba(22,27,55,.94),rgba(8,13,29,.96));border:1px solid rgba(255,255,255,.16);border-radius:20px;padding:1rem;box-shadow:0 18px 55px rgba(0,0,0,.22)}
-.panel-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:.75rem;margin-bottom:.8rem}
+.panel{background:linear-gradient(145deg,rgba(19,22,29,.97),rgba(10,11,16,.98));border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:1rem;box-shadow:0 18px 55px rgba(0,0,0,.3)}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:.75rem;margin-bottom:.8rem}.panel-head:after{content:'';display:block}
 .panel-title{color:#f2f4ff;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;font-weight:850}
 .ready{color:#76eadb;font-size:.75rem;white-space:nowrap}
 .info{color:#adb6cc;font-size:.76rem;line-height:1.45}
@@ -36,9 +38,11 @@ st.markdown("""
 div[data-testid="stTextInput"] label,div[data-testid="stSelectbox"] label,div[data-testid="stTextArea"] label,div[data-testid="stSlider"] label,div[data-testid="stFileUploader"] label,div[data-testid="stRadio"] label{color:#e7eaf4!important;font-weight:700!important}
 div[data-testid="stTextInput"] input,div[data-testid="stTextArea"] textarea,div[data-baseweb="select"]>div{background:#f4f5f9!important;color:#101422!important;border:0!important;border-radius:10px!important}
 div[data-testid="stButton"]>button{min-height:2.45rem;border-radius:10px;background:#17213b;color:#f7f8ff;border:1px solid rgba(255,255,255,.2);font-weight:750}
-div[data-testid="stButton"]>button[kind="primary"],button[kind="primaryFormSubmit"]{background:linear-gradient(105deg,#af82ff,#58e1d1);color:#07101b;border:0}
-[data-testid="stTabs"] button{color:#98a2ba!important;font-weight:800!important;font-size:.72rem!important}
-[data-testid="stTabs"] button[aria-selected="true"]{color:#75eadb!important}
+div[data-testid="stButton"]>button[kind="primary"],button[kind="primaryFormSubmit"]{background:linear-gradient(105deg,#e23d52,#ff6b61);color:#fff;border:0;box-shadow:0 10px 26px rgba(226,61,82,.2)}
+[data-testid="stTabs"] [role="tablist"]{gap:.25rem;border-bottom:1px solid rgba(255,255,255,.1)}
+[data-testid="stTabs"] button{color:#98a2ba!important;font-weight:800!important;font-size:.72rem!important;border-radius:8px 8px 0 0;padding:.55rem .7rem}
+[data-testid="stTabs"] button:hover{color:#ff9aa1!important;background:rgba(226,61,82,.08)}
+[data-testid="stTabs"] button[aria-selected="true"]{color:#ff6672!important;border-bottom-color:#e23d52!important}
 [data-testid="stAlert"]{color:#edf0f8}
 @media(max-width:900px){.block-container{overflow:visible}.panel{padding:.8rem}.brandbar small{font-size:.56rem}.stage{height:260px}.empty-preview{height:260px}}
 </style>
@@ -63,7 +67,13 @@ if "voice_approved" not in st.session_state: st.session_state.voice_approved = F
 if "editor" not in st.session_state: st.session_state.editor = EditorState()
 editor = st.session_state.editor
 
-st.markdown('<div class="brandbar"><div>🎬 &nbsp;AungMin Movie Recap</div><small>ONE-PAGE CREATOR STUDIO · AUTHORIZED MEDIA</small></div>', unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown('<div style="font-weight:900;font-size:1.05rem;color:#fff">◈ AungMin Movie Recap</div><div style="color:#f05a67;font-size:.62rem;letter-spacing:.14em;margin:.25rem 0 1.15rem">AI VIDEO STUDIO</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#ff6672;font-size:.68rem;letter-spacing:.14em;font-weight:800;margin-bottom:.45rem">WORKSPACE</div>', unsafe_allow_html=True)
+    st.markdown('<div style="padding:.6rem .7rem;border-radius:9px;background:rgba(226,61,82,.16);color:#fff;font-weight:750">▣ Studio</div><div style="padding:.6rem .7rem;color:#a7adbd">▤ Transcript Hub</div><div style="padding:.6rem .7rem;color:#a7adbd">⇩ Downloads</div><div style="padding:.6rem .7rem;color:#a7adbd">◯ Profile</div><div style="padding:.6rem .7rem;color:#a7adbd">? Support</div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:1px;background:rgba(255,255,255,.12);margin:1rem 0"></div><div style="color:#858c9e;font-size:.72rem;line-height:1.5">Current app features remain available in the Studio workspace. Authorized media only.</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="brandbar"><div>◈ &nbsp;AungMin Movie Recap</div><div style="display:flex;align-items:center;gap:.65rem"><span class="trial">● FREE STUDIO</span><small>AI VIDEO WORKSPACE</small></div></div>', unsafe_allow_html=True)
 
 left, right = st.columns([1.05, 1.0], gap="large")
 with left:
@@ -146,7 +156,7 @@ with right:
                 st.session_state.script_approved = False
                 st.session_state.voice_approved = False
                 if st.session_state.media_path:
-                    st.success("Original video loaded. Preview is ready on the left.")
+                    st.success("Original video loaded. Studio preview is ready.")
                 else:
                     st.info("Link information loaded. Browser preview is available when the provider supports embedding; upload the file to create a recap.")
             except (ValueError, ImportError) as exc:

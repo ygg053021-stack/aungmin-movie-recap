@@ -460,3 +460,24 @@
 - [x] Push the verified parity fix to GitHub main
 
 ရက်စွဲ: 2026-08-26 — user reported preview text is correct but exported text and blur placement still differ.
+
+# Reference design assessment — completed
+
+- [x] Inspect the three user-provided reference videos for layout, interaction, preview, and editing behavior
+- [x] Compare the requested design with the current Streamlit editor architecture
+- [x] Explain whether the design change is easy or difficult and whether it affects export speed
+- [x] Do not change code until the user approves the design approach
+
+ရက်စွဲ: 2026-08-27 — user requested an explanation first, without code, about adopting the reference web design.
+
+# Reference-style studio UI migration — pending
+
+- [x] Preserve current source upload, supported link review, and original-duration workflow
+- [x] Preserve Voice Script, Burmese narration approval, auto subtitle timing, blur, logo, watermark, and download behavior
+- [x] Restyle the shell to the reference dark studio layout with header, sidebar, video workspace, and grouped tabs
+- [ ] Rehouse existing controls into Source, Voice, Effects, and Advanced sections without changing backend render contracts
+- [x] Keep 9:16/16:9 preview geometry, subtitle parity, full-cover blur, and responsive mobile behavior
+- [x] Run regression tests and real MP4 smoke export after the design-only migration
+- [x] Push the verified design migration to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user approved changing the current usable UI to a reference-style design while preserving all current capabilities.
