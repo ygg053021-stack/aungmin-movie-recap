@@ -142,12 +142,14 @@ with right:
                     st.session_state.source,
                     st.session_state.media_path,
                     editor,
-                    output_platform="TikTok",
+                    output_platform=st.session_state.get("output_platform", "TikTok"),
                     voice_name="my-MM-ThihaNeural",
                     style="စိတ်လှုပ်ရှားဖွယ် ဇာတ်ကြောင်းရေးဟန်",
                     detail="Detailed",
                     progress=update_one_click,
                 )
+                # Commit the approved script/voice before the final encode. If the
+                # encoder fails, the user can still inspect/retry from Finish.
                 st.session_state.bundle = bundle
                 st.session_state.script_approved = True
                 st.session_state.voice_preview = voice_preview
@@ -167,7 +169,7 @@ with right:
         uploaded = st.file_uploader("Upload video file", type=["mp4", "mov", "webm", "mkv"], key="source_upload") if mode == "Upload video" else None
         source_url = st.text_input("Video link", placeholder="YouTube · TikTok · Bilibili · RedNote · public URL", key="source_url") if mode == "Paste video link" else ""
         quality = st.selectbox("Download quality / အရည်အသွေး", ["MP4 720p", "MP4 480p", "MP4 360p"], index=0, key="download_quality") if mode == "Paste video link" else "MP4 720p"
-        st.caption("Public/authorized media only. Link loading depends on provider access rules. Video limit: 5 minutes. Quality options depend on provider availability.")
+        st.caption("Public/authorized media only. Link loading depends on provider access rules. No hard duration/file-size cap is imposed by the app; runtime and provider limits may still apply. Quality options depend on provider availability.")
         st.markdown('<div style="margin:.55rem 0 .35rem;padding:.7rem .8rem;border:1px solid rgba(112,232,216,.3);border-radius:12px;background:rgba(112,232,216,.08)"><b style="color:#75eadb">Gemini API key လိုပါသလား?</b><br><span style="color:#b9c4d8;font-size:.78rem">Google AI Studio မှာ key ယူပြီး ဒီအောက်က box ထဲ session-only ထည့်ပါ။</span><br><a href="https://aistudio.google.com/app/apikey" target="_blank" style="display:inline-block;margin-top:.45rem;color:#07101b;background:#75eadb;padding:.42rem .7rem;border-radius:8px;text-decoration:none;font-weight:800;font-size:.78rem">API key ရယူရန် → Google AI Studio</a></div>', unsafe_allow_html=True)
         st.session_state.api_key = st.text_input("Google AI Studio API key", type="password", key="api_key_input", help="Session-only key. Never commit it to GitHub.")
         if st.button("စတင်ရန် · Load original video", type="primary", use_container_width=True):
@@ -315,8 +317,11 @@ with right:
             blur_mode = st.selectbox("Blur mode / အုပ်မည့်နည်း", ["Auto default (အောက်ခြေစာတန်း)", "Manual drag (video ပေါ်ရွှေ့ရန်)"], index=0, key="blur_mode", disabled=not blur_enabled)
             editor.blur_strength = st.slider("Blur strength / အုပ်အား", 0, 60, 28, 2, disabled=not blur_enabled) if blur_enabled else 0
             if blur_enabled and blur_mode.startswith("Auto"):
-                # Cover the full lower subtitle band with a small safety margin.
-                editor.blur_x, editor.blur_y, editor.blur_w, editor.blur_h = 0, 68, 100, 32
+                # Seed auto blur only once. Never overwrite a user's canvas drag
+                # on every Streamlit rerun.
+                if not st.session_state.get("auto_blur_seeded", False):
+                    editor.blur_x, editor.blur_y, editor.blur_w, editor.blur_h = 4, 76, 92, 18
+                    st.session_state.auto_blur_seeded = True
             if blur_enabled and blur_mode.startswith("Manual"):
                 st.caption("Auto default က အောက်ခြေစာတန်းဧရိယာကို အုပ်ပါသည်။ မတူသောနေရာဖြစ်လျှင် x/y/width/height ကို manual ပြင်ပါ။")
                 editor.blur_x = st.slider("Blur X %", 0, 95, editor.blur_x, 1)
@@ -373,7 +378,10 @@ with right:
                     # Keep the canvas identity stable while dragging. Coordinates belong to
                     # the drawable state, not the widget key; including them remounted the
                     # component after every pointer event and made the preview disappear.
-                    canvas_key = f"finish_overlay_canvas_{ratio}_{canvas_width}x{canvas_height}_{round(preview_time, 1)}_{editor.subtitle_font}_{editor.subtitle_size}_{editor.subtitle_fill}_{editor.subtitle_design}_{editor.subtitle_enabled}_{hash(preview_text) % 100000}_{hash(watermark_text) % 100000}_{editor.blur_enabled}_{editor.blur_strength}"
+                    # Only a timeline/ratiowindow change may remount the canvas.
+                    # Mutable overlay values must not be part of the key: doing so
+                    # destroys the Fabric state immediately after a drag/resize.
+                    canvas_key = f"finish_overlay_canvas_{ratio}_{canvas_width}x{canvas_height}_{round(preview_time, 1)}"
                     canvas_kwargs = dict(
                         fill_color="rgba(0, 0, 0, 0.58)", stroke_width=3, stroke_color="#70e8d8",
                         background_image=frame, update_streamlit=True, height=canvas_height, width=canvas_width,
@@ -391,6 +399,9 @@ with right:
                             canvas_result = st_canvas(**canvas_kwargs)
                     editor, coords = sync_blur_from_canvas(editor, canvas_result.json_data, canvas_width, canvas_height)
                     editor = sync_overlays_from_canvas(editor, canvas_result.json_data, canvas_width, canvas_height)
+                    # Persist the mutated dataclass; otherwise Streamlit reruns
+                    # restore the previous editor object and the drag appears lost.
+                    st.session_state.editor = editor
                     if coords:
                         st.caption(f"လက်ရှိ Blur: X {coords[0]}% · Y {coords[1]}% · Width {coords[2]}% · Height {coords[3]}% — box ကို video ပေါ်မှာ ဖိဆွဲရွှေ့ပါ။")
                     st.caption(f"Subtitle: X {editor.subtitle_x}% · Y {editor.subtitle_y}% · Size {editor.subtitle_size}px · Logo: X {editor.logo_x}% · Y {editor.logo_y}% · Watermark: X {editor.watermark_x}% · Y {editor.watermark_y}%")

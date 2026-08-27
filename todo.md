@@ -711,3 +711,11 @@
 - [x] Rebuild the workflow code against the reference specification without breaking manual controls
 - [x] Render and inspect the supplied reference video and project sample at multiple timestamps
 - [x] Run regression tests and push the verified sample-style rebuild to GitHub main
+
+# Preview and one-click blocking repair — verified
+
+- [x] Audit the screenshot-reported preview canvas sizing, aspect-ratio mapping, and rerun state behavior
+- [x] Fix preview rendering so the selected 9:16 or 16:9 frame remains stable and uses the real source frame
+- [x] Fix one-click recap completion so generated script, voice, subtitles, and final MP4 are committed to the visible Finish state
+- [x] Add regression coverage for stable preview state and completed one-click output state
+- [x] Run a real sample render and push the verified repair to GitHub main
