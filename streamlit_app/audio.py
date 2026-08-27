@@ -140,6 +140,30 @@ def pad_or_trim_audio_to_duration(input_path: str, output_path: str, target_seco
     return measured
 
 
+def fit_audio_preserving_script(input_path: str, output_path: str, target_seconds: float, max_speed_delta: float = 0.18) -> float:
+    """Fit narration without dropping words.
+
+    Short narration is padded with silence. Slightly long narration is sped up by
+    one bounded, uniform factor. If it would require a larger change, fail clearly
+    instead of silently trimming the approved script.
+    """
+    from .media import probe_duration
+
+    actual = probe_duration(input_path)
+    target = max(0.5, float(target_seconds or 0.0))
+    if actual <= 0:
+        raise ValueError("Voiceover ကြာချိန်ကို မဖတ်နိုင်ပါ။")
+    if actual <= target:
+        return pad_or_trim_audio_to_duration(input_path, output_path, target)
+    required_speed = actual / target
+    if required_speed > 1.0 + max(0.01, float(max_speed_delta)):
+        raise ValueError(
+            f"Approved narration သည် video ထက် {actual - target:.1f} စက္ကန့်ရှည်နေပါသည်။ "
+            "စာသားမဖြတ်ဘဲ အသံကို အလွန်မြန်အောင်မလုပ်နိုင်သောကြောင့် script ကို အနည်းငယ်တိုအောင် ပြင်ပြီး Voice ကို ပြန် approve လုပ်ပါ။"
+        )
+    return fit_audio_to_duration(input_path, output_path, target)
+
+
 def fit_audio_to_duration(input_path: str, output_path: str, target_seconds: float) -> float:
     """Time-stretch narration to target duration and return the measured result.
 

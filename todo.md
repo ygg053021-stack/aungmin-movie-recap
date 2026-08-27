@@ -366,7 +366,7 @@
 - [ ] Rebuild filter graph labels and chain syntax so blur, subtitles, watermark, and logo can coexist
 - [ ] Add regression coverage for preview generation and filter graph validity
 - [ ] Run a real final MP4 render with the current Finish controls
-- [ ] Push the verified recovery fix to GitHub main
+- [x] Push the verified recovery fix to GitHub main
 
 ရက်စွဲ: 2026-08-26 — live screenshots reported missing `image_to_url` and FFmpeg `Filter not found`.
 
@@ -559,15 +559,35 @@
 
 ရက်စွဲ: 2026-08-27 — user reported subtitle size does not change as selected in preview and final export does not match.
 
-# Restore full narration and final MP4 output — in progress
+# Restore full narration and final MP4 output — completed
 
 - [x] Identify why final MP4 creation stopped after the recent audio/geometry changes
-- [ ] Preserve every approved script word without accidental segment skipping or trimming
-- [ ] Generate one continuous narration with one stable speaking pace
-- [ ] Use only a bounded minimal speed correction when source duration requires it
-- [ ] Keep audio/video duration and start/end alignment exact
+- [x] Preserve every approved script word without accidental segment skipping or trimming
+- [x] Generate one continuous narration with one stable speaking pace
+- [x] Use only a bounded minimal speed correction when source duration requires it
+- [x] Keep audio/video duration and start/end alignment exact
 - [x] Preserve Finish blur/subtitle overlays without changing the approved voice
 - [x] Run real MP4, mux, duration, script-completeness, and preview regression tests
-- [ ] Push the verified recovery fix to GitHub main
+- [x] Push the verified recovery fix to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user reported missing final video and requested full-script, stable-pace, exact audio/video synchronization.
+
+# New two-video reference analysis — completed
+
+- [x] Inspect both newly provided reference videos in detail without changing code
+- [x] Compare their preview, editing, timing, and export behavior
+- [x] Map shared requirements to the current AungMin Movie Recap features
+- [x] Report the exact understood specification before implementation
+
+ရက်စွဲ: 2026-08-27 — user supplied two new reference videos and requested the same usable behavior.
+
+# Approved reference workflow implementation — completed
+
+- [x] Re-read current source and preserve all existing working behavior before implementation
+- [x] Implement complete approved-script narration with one stable pace and only bounded duration correction
+- [x] Unify preview/export crop, canvas, blur, subtitle, font, size, and position behavior
+- [x] Preserve compact grouped controls and stable pre-export live preview
+- [x] Restore reliable final MP4 generation and keep approved voice isolated from Finish edits
+- [x] Run real 9:16/16:9 reference-style regression tests and push to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user approved implementation after providing two reference videos.
