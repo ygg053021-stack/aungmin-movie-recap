@@ -106,11 +106,13 @@ with left:
             st.video(final_path, start_time=0)
             st.download_button("Download final MP4", st.session_state.final_video, file_name="aungmin-movie-recap.mp4", mime="video/mp4", use_container_width=True)
         else:
-            st.markdown('<div class="empty-preview">Finish controls မှာ preview ကိုချိန်ပြီး အပေါ်က Render ခလုတ်ကိုနှိပ်ပါ။</div>', unsafe_allow_html=True)
             if st.session_state.media_path and st.session_state.bundle and st.session_state.voice_approved:
-                if st.button("Render final recap video", type="primary", use_container_width=True, key="render_final_top"):
+                st.markdown('<div class="section-note" style="margin:.65rem 0 .45rem">Finish preview ကိုစစ်ပြီး အောက်ကခလုတ်ကိုနှိပ်မှ Final MP4 render စတင်ပါမယ်။</div>', unsafe_allow_html=True)
+                if st.button("▶ Render final recap video", type="primary", use_container_width=True, key="render_final_top"):
                     st.session_state.render_requested = True
                     st.rerun()
+            else:
+                st.markdown('<div class="empty-preview">02 Script ကို approve လုပ်ပြီး 03 Recap Voice ကို approve လုပ်ပါ။ ထို့နောက် Finish preview နှင့် Final render ကို အသုံးပြုနိုင်ပါမယ်။</div>', unsafe_allow_html=True)
     if st.session_state.source:
         duration = probe_duration(st.session_state.media_path) if st.session_state.media_path else 0
         st.markdown(f'<div class="info" style="margin-top:.7rem">Loaded: <b>{st.session_state.source.platform}</b> · {st.session_state.source.name} · {duration:.1f}s · Original source remains available for comparison.</div>', unsafe_allow_html=True)

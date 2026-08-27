@@ -558,3 +558,16 @@
 - [x] Push the verified correction to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user reported subtitle size does not change as selected in preview and final export does not match.
+
+# Restore full narration and final MP4 output — in progress
+
+- [x] Identify why final MP4 creation stopped after the recent audio/geometry changes
+- [ ] Preserve every approved script word without accidental segment skipping or trimming
+- [ ] Generate one continuous narration with one stable speaking pace
+- [ ] Use only a bounded minimal speed correction when source duration requires it
+- [ ] Keep audio/video duration and start/end alignment exact
+- [x] Preserve Finish blur/subtitle overlays without changing the approved voice
+- [x] Run real MP4, mux, duration, script-completeness, and preview regression tests
+- [ ] Push the verified recovery fix to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user reported missing final video and requested full-script, stable-pace, exact audio/video synchronization.
