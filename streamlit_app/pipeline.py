@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .audio import create_segmented_voiceover, create_voiceover, pad_or_trim_audio_to_duration, make_srt
+from .audio import create_voiceover, pad_or_trim_audio_to_duration, make_srt
 from .config import EditorState
 from .render import render_mp4
 from .media import probe_duration
@@ -40,16 +40,14 @@ def render_voice_preview(
     started = time.monotonic()
     if progress:
         progress(12, "အတည်ပြုထားသော script မှ မြန်မာအသံ ဖန်တီးနေသည်", started)
-    segments = bundle.get("segments") if isinstance(bundle.get("segments"), list) else []
-    if segments:
-        create_segmented_voiceover(segments, str(voice_path), voice_name, source_duration := probe_duration(media_path))
-    else:
-        create_voiceover(recap, str(voice_path), voice_name)
-        source_duration = probe_duration(media_path)
+    # Generate one continuous narration. Per-scene atempo fitting made late
+    # segments sound rushed and caused the speaking pace to jump.
+    source_duration = probe_duration(media_path)
     if source_duration <= 0:
         raise ValueError("Original video duration ကို မဖတ်နိုင်ပါ။")
+    create_voiceover(recap, str(voice_path), voice_name)
     if progress:
-        progress(42, f"Narration ကို မူရင်း {source_duration:.1f} စက္ကန့်နဲ့ ချိန်နေသည်", started)
+        progress(42, f"Narration ကို မူရင်း {source_duration:.1f} စက္ကန့်နဲ့ pace မပြောင်းဘဲ ချိန်နေသည်", started)
     pad_or_trim_audio_to_duration(str(voice_path), str(fitted_voice_path), source_duration)
     if progress:
         progress(55, "မူရင်းအသံကို ဖယ်ပြီး duration တူ recap voice preview ပေါင်းနေသည်", started)
@@ -114,7 +112,7 @@ def render_bundle_to_mp4(
             raise ValueError("မြန်မာအသံဖိုင် မဖန်တီးနိုင်ပါ။")
         if progress:
             progress(40, f"Narration ကို မူရင်း {duration:.1f} စက္ကန့်နဲ့ ချိန်နေသည်", started)
-        fit_audio_to_duration(str(raw_voice_path), str(voice_path), duration)
+        pad_or_trim_audio_to_duration(str(raw_voice_path), str(voice_path), duration)
 
         # The approved voice is fitted to source duration, so captions use the
         # source timeline exactly instead of drifting with raw TTS length.

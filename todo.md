@@ -527,3 +527,14 @@
 - [x] Push the verified recovery fix to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user reported no final recap video and continued preview flicker after the voice-isolation change.
+
+# Recap audio and final overlay parity — completed
+
+- [x] Inspect the newly provided recap video against the source, approved script, and narration timeline
+- [x] Keep one stable speaking pace across the full video while preserving the complete approved script where duration permits
+- [x] Align caption units to the same narration timeline used by the final audio
+- [x] Make final crop, blur, subtitle, font, size, and position use the exact stable preview coordinate model
+- [x] Run real 9:16 and 16:9 final MP4 comparison tests and verify the output is created
+- [x] Push the verified audio and overlay parity correction to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user reported that the preview is stable but final recap audio/text/blur/position still differ and requested exact video review.
