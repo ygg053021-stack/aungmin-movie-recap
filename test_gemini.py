@@ -92,10 +92,30 @@ class GeminiRecoveryTests(unittest.TestCase):
         self.assertEqual([segment["text"] for segment in bundle["segments"]], ["ပထမ scene", "ဒုတိယ scene", "ကန့်သတ်ပြီးနောက် scene"])
         self.assertEqual(bundle["segments"][-1]["end"], 15.0)
 
+    def test_bundle_parser_normalizes_scene_windows_to_one_gap_free_timeline(self):
+        text = '{"recap_bn":"အ" * 400,"subtitle_bn":"စာတန်း","segments":[{"start":5,"end":12,"text":"ပထမ","text_en":"First"},{"start":10,"end":18,"text":"ဒုတိယ","text_en":"Second"},{"start":22,"end":25,"text":"တတိယ","text_en":"Third"}]}'
+        text = text.replace('"အ" * 400', '"' + ('အ' * 400) + '"')
+        bundle = gemini._parse_bundle(text, duration=30)
+        segments = bundle["segments"]
+        self.assertEqual(segments[0]["start"], 0.0)
+        self.assertEqual(segments[-1]["end"], 30.0)
+        self.assertTrue(all(segments[i]["end"] <= segments[i + 1]["start"] for i in range(len(segments) - 1)))
+        self.assertEqual(segments[1]["start"], segments[0]["end"])
+
     def test_bundle_parser_accepts_sdk_output_text(self):
         bundle = gemini._parse_bundle(FakeResponse.output_text)
         self.assertEqual(bundle["recap_bn"], "စမ်းသပ် recap")
         self.assertEqual(bundle["subtitle_bn"], "စမ်းသပ်စာတန်း")
+
+    def test_full_length_bundle_rejects_missing_english_scene_translation(self):
+        with self.assertRaisesRegex(ValueError, "English subtitle translation"):
+            gemini._validate_full_length_bundle(
+                {
+                    "recap_bn": "က" * 700,
+                    "segments": [{"start": 0, "end": 15, "text": "scene", "text_en": "Scene"}, {"start": 15, "end": 30, "text": "scene 2", "text_en": "Scene 2"}, {"start": 30, "end": 45, "text": "scene 3", "text_en": "Scene 3"}, {"start": 45, "end": 60, "text": "scene 4"}],
+                },
+                60.0,
+            )
 
     def test_503_summary_is_actionable(self):
         client = FakeClient()

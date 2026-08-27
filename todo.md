@@ -695,3 +695,11 @@
 - [x] Ensure narration duration and subtitle timing are derived from the same approved scene schedule without skipped or duplicated content
 - [x] Verify sample output at multiple timestamps for visual scene, narration segment, and subtitle alignment
 - [x] Run regression and real-render checks before updating GitHub main
+
+# Precision synchronization refinement — verified
+
+- [x] Validate and normalize scene segments into one monotonic, gap-aware master timeline before voice and subtitle generation
+- [x] Derive narration clip timing and subtitle chunk timing from the same normalized segment windows
+- [x] Preserve compact bilingual line groups without a second wrap or subtitle event drift
+- [x] Verify audio activity, subtitle events, and source frames at multiple timestamps in a real render
+- [x] Run the expanded regression suite and push the precision refinement to GitHub main

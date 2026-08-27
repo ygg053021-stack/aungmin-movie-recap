@@ -211,7 +211,31 @@ def _normalize_segments(raw: Any, duration: float | None = None) -> list[dict[st
             segment["text_en"] = english_value[:1200]
         normalized.append(segment)
     normalized.sort(key=lambda segment: (float(segment["start"]), float(segment["end"])))
-    return normalized
+    if not normalized or not limit:
+        return normalized
+    # Convert model timestamps into one deterministic, gap-free schedule. This
+    # schedule is shared by segmented narration and timed subtitles, so an
+    # overlap cannot double-mix audio and a gap cannot shift later captions.
+    timeline: list[dict[str, float | str]] = []
+    cursor = 0.0
+    for index, segment in enumerate(normalized):
+        start = max(cursor, float(segment["start"]))
+        if index == 0:
+            start = 0.0
+        end = max(start + 0.5, float(segment["end"]))
+        if index + 1 < len(normalized):
+            next_start = max(0.0, min(limit, float(normalized[index + 1]["start"])))
+            end = max(end, next_start)
+        end = min(limit, end)
+        if end <= start:
+            continue
+        item = dict(segment)
+        item["start"], item["end"] = start, end
+        timeline.append(item)
+        cursor = end
+    if timeline:
+        timeline[-1]["end"] = limit
+    return timeline
 
 
 def _parse_bundle(text: str, duration: float | None = None) -> dict:
@@ -253,6 +277,8 @@ def _validate_full_length_bundle(bundle: dict, duration: float | None) -> None:
     coverage = sum(max(0.0, float(item.get("end", 0.0)) - float(item.get("start", 0.0))) for item in segments if isinstance(item, dict))
     if coverage < float(duration) * 0.9:
         raise ValueError("Scene timeline သည် video duration ရဲ့ 90% မဖုံးလွှမ်းသေးပါ။ Scene အစအဆုံး ပြန် generate လုပ်ပါ။")
+    if any(not isinstance(item, dict) or not str(item.get("text_en", "")).strip() for item in segments):
+        raise ValueError("Scene တစ်ခုချင်းစီအတွက် English subtitle translation မပြည့်စုံသေးပါ။")
 
 
 def generate_recap_bundle(
