@@ -96,15 +96,21 @@ with left:
     with final_tab:
         st.markdown('<div class="stage-label"><span>Edited recap output</span><span>04 · FINISH</span></div>', unsafe_allow_html=True)
         live_preview_slot = None
-        if not st.session_state.final_video:
-            live_preview_slot = st.empty()
+        if not st.session_state.final_video and st.session_state.media_path:
+            # Keep one stable host in the Final recap tab. The Finish controls
+            # populate this same container later instead of replacing it on rerun.
+            live_preview_slot = st.container()
         if st.session_state.final_video:
             final_path = str(Path(tempfile.gettempdir()) / "aungmin-final-preview.mp4")
             Path(final_path).write_bytes(st.session_state.final_video)
             st.video(final_path, start_time=0)
             st.download_button("Download final MP4", st.session_state.final_video, file_name="aungmin-movie-recap.mp4", mime="video/mp4", use_container_width=True)
         else:
-            st.markdown('<div class="empty-preview">Render the recap to unlock the final preview.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="empty-preview">Finish controls မှာ preview ကိုချိန်ပြီး အပေါ်က Render ခလုတ်ကိုနှိပ်ပါ။</div>', unsafe_allow_html=True)
+            if st.session_state.media_path and st.session_state.bundle and st.session_state.voice_approved:
+                if st.button("Render final recap video", type="primary", use_container_width=True, key="render_final_top"):
+                    st.session_state.render_requested = True
+                    st.rerun()
     if st.session_state.source:
         duration = probe_duration(st.session_state.media_path) if st.session_state.media_path else 0
         st.markdown(f'<div class="info" style="margin-top:.7rem">Loaded: <b>{st.session_state.source.platform}</b> · {st.session_state.source.name} · {duration:.1f}s · Original source remains available for comparison.</div>', unsafe_allow_html=True)
@@ -330,8 +336,8 @@ with right:
                         drawing_mode="transform", initial_drawing=canvas_initial_drawing(editor, canvas_width, canvas_height, preview_text if editor.subtitle_enabled else "", FONT_FAMILIES.get(editor.subtitle_font, "Pyidaungsu Book"), logo_path),
                         display_toolbar=True, key=canvas_key,
                     )
-                    preview_host = live_preview_slot if live_preview_slot is not None else st.empty()
-                    with preview_host.container():
+                    preview_host = live_preview_slot if live_preview_slot is not None else st.container()
+                    with preview_host:
                         st.markdown(f'<div class="stage-label"><span>Live final-output preview · {ratio}</span><span>{canvas_width}×{canvas_height}</span></div>', unsafe_allow_html=True)
                         if ratio == "9:16":
                             preview_columns = st.columns([1, 1, 1])
@@ -351,7 +357,8 @@ with right:
             st.info(f"Final output: {output_dimensions} · 30 FPS · မူရင်း video ကြာချိန်အတိုင်း။ Source က resolution နိမ့်လျှင် upscale လုပ်မည်၊ မူရင်း detail အသစ်ဖန်တီးမည်မဟုတ်ပါ။")
             music_path = None
             st.markdown('<div class="section-note">Blur ကို privacy/editing အတွက်သာ အသုံးပြုမည်။ Final video တွင် မြန်မာ voice narration နှင့် မြန်မာ subtitle တစ်မျိုးတည်း ပါမည်။</div>', unsafe_allow_html=True)
-            if st.button("Render final recap video", type="primary", use_container_width=True):
+            render_requested = bool(st.session_state.pop("render_requested", False))
+            if st.button("Render final recap video", type="primary", use_container_width=True, key="render_final_controls") or render_requested:
                 if not st.session_state.bundle or not st.session_state.script_approved:
                     st.error("02 · Recap မှာ script ကို အရင် Generate လုပ်ပြီး Approve လုပ်ပါ။")
                 elif not st.session_state.voice_preview or not st.session_state.voice_approved:

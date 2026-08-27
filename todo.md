@@ -516,3 +516,14 @@
 - [x] Push the verified fix to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user reported that Finish-only editing affected Recap Voice and that the preview still flickers.
+
+# Final output recovery and stable preview — completed
+
+- [x] Inspect the newest final-render error and preview flicker evidence
+- [x] Reproduce the missing MP4 path without regenerating the approved voice
+- [x] Fix final output creation/validation and preserve the exact approved narration
+- [x] Prevent preview remounts while controls or timestamps are changed
+- [x] Run real source-video, voice reuse, preview lifecycle, and MP4 regression tests
+- [x] Push the verified recovery fix to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user reported no final recap video and continued preview flicker after the voice-isolation change.
