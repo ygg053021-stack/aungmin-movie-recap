@@ -37,7 +37,10 @@ def probe_duration(media_path: str) -> float:
 def save_uploaded_file(uploaded, prefix: str) -> str:
     suffix = Path(uploaded.name).suffix.lower() or ".mp4"
     path = Path(tempfile.gettempdir()) / f"{prefix}{suffix}"
-    path.write_bytes(uploaded.getvalue())
+    with path.open("wb") as destination:
+        if hasattr(uploaded, "seek"):
+            uploaded.seek(0)
+        shutil.copyfileobj(uploaded, destination, length=1024 * 1024)
     return str(path)
 
 
@@ -45,10 +48,9 @@ def prepare_quick_media(media_path: str) -> str:
     """Create a small analysis proxy so Quick Recap does not upload a huge original."""
     import imageio_ffmpeg
     source_duration = probe_duration(media_path)
-    # Keep the complete <=5-minute source so later scenes are not omitted.
-    # Longer sources are rejected by the app validator; the lower frame rate keeps
-    # the upload small enough for a fast Gemini analysis.
-    max_seconds = min(max(source_duration, 1.0), 300.0) if source_duration else 300.0
+    # Keep the complete source so later scenes are never omitted. Downsampling
+    # reduces analysis size, but duration is preserved without a product cap.
+    max_seconds = max(source_duration, 1.0) if source_duration else 1.0
     analysis_fps = 2 if max_seconds <= 180 else 1
     quick_path = str(Path(tempfile.gettempdir()) / f"aungmin-quick-{os.getpid()}.mp4")
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -61,9 +63,9 @@ def prepare_quick_media(media_path: str) -> str:
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired as exc:
-        raise ValueError("Quick preview preparation timed out. Try a shorter video.") from exc
+        raise ValueError("Quick analysis preparation timed out. Check the source format and available runtime resources.") from exc
     if result.returncode != 0 or not Path(quick_path).exists():
-        raise ValueError("Quick preview could not be prepared. Try an MP4 or a shorter video.")
+        raise ValueError("Quick analysis could not be prepared. Try an MP4, MOV, WEBM, or MKV source.")
     return quick_path
 
 

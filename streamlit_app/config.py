@@ -3,8 +3,10 @@ from urllib.parse import urlparse
 
 APP_NAME = "AungMin Movie Recap"
 MODEL_NAME = "gemini-3.7-flash"
-MAX_DURATION_SECONDS = 5 * 60
-MAX_UPLOAD_MB = 200
+# No product-level duration or file-size cap. Deployments may add optional
+# safety caps through validators/environment policy without changing the UI contract.
+MAX_DURATION_SECONDS = None
+MAX_UPLOAD_MB = None
 PLATFORMS = ("YouTube", "TikTok", "Bilibili", "RedNote", "Facebook", "Generic")
 RATIOS = {"YouTube": "16:9", "TikTok": "9:16", "Bilibili": "16:9", "RedNote": "9:16", "Facebook": "1:1", "Generic": "16:9"}
 VOICE_NAMES = ("my-MM-NilarNeural", "my-MM-ThihaNeural", "en-US-AriaNeural")

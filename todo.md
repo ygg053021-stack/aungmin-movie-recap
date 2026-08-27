@@ -676,3 +676,15 @@
 - [x] Push only after the automatic flow and regression tests pass
 
 ရက်စွဲ: 2026-08-27 — user requested automatic one-click Recap with optional manual editing and no repeated user testing.
+
+# Unlimited input, compact subtitles, and stable manual preview — verified
+
+- [x] Remove the hard 5-minute and 200 MB user-facing limits while keeping only safe runtime/resource validation
+- [x] Make upload/link validation and messages accurately describe the new unlimited-by-policy behavior
+- [x] Implement compact Burmese/English subtitle wrapping that stays within the selected 9:16 or 16:9 output frame
+- [x] Keep subtitle phrase timing intact while wrapping by display width rather than producing tall character columns
+- [x] Stabilize manual Finish preview state so drag/resize/font/size/color changes remain visible immediately
+- [x] Run a real output render with the supplied movie-short and inspect subtitle layout and duration
+- [x] Run the complete regression suite and push only verified code to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user requested removal of hard limits, sample-style compact subtitle lines, and working manual preview controls.

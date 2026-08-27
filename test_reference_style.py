@@ -2,10 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from streamlit_app.audio import make_srt
+from streamlit_app.audio import make_srt, wrap_caption
 from streamlit_app.config import FONT_PRESETS, EditorState
 from streamlit_app.render import _subtitle_filter, _video_graph
 from streamlit_app.editor import add_preview_subtitle, canvas_initial_drawing, sync_blur_from_canvas, sync_overlays_from_canvas
+from streamlit_app.validators import duration_notice, validate_media_file
 
 
 class ReferenceStyleTests(unittest.TestCase):
@@ -88,6 +89,18 @@ class ReferenceStyleTests(unittest.TestCase):
         state = sync_overlays_from_canvas(state, __import__("json").dumps(drawing), 720, 405)
         self.assertEqual(state.subtitle_x, 30)
         self.assertEqual(state.subtitle_y, 50)
+
+    def test_compact_caption_wrap_stays_readable_for_burmese(self):
+        lines = wrap_caption("စော်ကားတာကသူတို့ဘဝရဲ့အကြီးမားဆုံးဖြစ်လာပါတော့တယ်ကောင်မလေးနဲ့ထမင်းစားနေတုန်း", 32).splitlines()
+        self.assertGreater(len(lines), 1)
+        self.assertLessEqual(max(map(len, lines)), 32)
+
+    def test_media_validation_has_no_product_size_or_duration_cap(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "large.mp4"
+            path.write_bytes(b"x" * 1024)
+            validate_media_file(str(path), 60 * 60)
+        self.assertIn("မိနစ်အကန့်အသတ် မရှိ", duration_notice(3600))
 
     def test_srt_uses_scene_timestamps_when_available(self):
         with tempfile.TemporaryDirectory() as folder:

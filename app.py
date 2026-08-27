@@ -365,7 +365,9 @@ with right:
                     manual_text = st.session_state.get("manual_subtitle", "").strip()
                     if manual_text:
                         preview_bundle["subtitle_bn"] = manual_text
-                    max_preview_chars = 22 if ratio == "9:16" else 34 if ratio == "16:9" else 28
+                    preview_font_px = max(18, int(round(editor.subtitle_size * canvas_width / 1920 * 1.35)))
+                    preview_text_width = max(120, int(canvas_width * max(5, editor.subtitle_w) / 100))
+                    max_preview_chars = max(18, min(48, int(preview_text_width / max(preview_font_px * 0.52, 1))))
                     preview_text = caption_for_time(preview_bundle, preview_time, source_duration, editor.subtitle_mode, max_preview_chars) if preview_bundle else ""
                     logo_path = st.session_state.get("logo_path")
                     # Keep the canvas identity stable while dragging. Coordinates belong to

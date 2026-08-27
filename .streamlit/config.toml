@@ -1,0 +1,5 @@
+[server]
+# Product-level upload policy is unlimited; this high ceiling only prevents the
+# Streamlit default 200 MB cap from blocking large authorized source videos.
+maxUploadSize = 102400
+maxMessageSize = 102400

@@ -83,7 +83,8 @@ def canvas_initial_drawing(state: EditorState, width: int, height: int, subtitle
         # Match the export-side ASS formula, then scale it into the preview canvas.
         # Do not clamp to 16: that made 9:16 slider changes appear frozen.
         font_size = max(8, min(72, int(round(state.subtitle_size * width / 1920 * 1.35))))
-        max_chars = max(10, min(24, int(width / max(font_size * 0.58, 1))))
+        text_region_width = max(120, int(width * max(5, state.subtitle_w) / 100))
+        max_chars = max(18, min(48, int(text_region_width / max(font_size * 0.52, 1))))
         # Keep all approved subtitle content; only wrap it for the visible canvas.
         subtitle_text = _compact_canvas_text(subtitle, max_chars)
         objects.append({
