@@ -481,3 +481,15 @@
 - [x] Push the verified design migration to GitHub main
 
 ရက်စွဲ: 2026-08-27 — user approved changing the current usable UI to a reference-style design while preserving all current capabilities.
+
+# Compact editor and final-output preview restructuring — completed
+
+- [x] Group Source, Voice, Blur, Subtitle, Branding, Preview, and Export controls into compact expandable sections
+- [x] Reduce long-page scrolling while preserving every existing control and state
+- [x] Place the live floating source frame in the same main display area used by the final recap preview
+- [x] Make the preview use exact selected 9:16 or 16:9 output framing and normalized coordinates
+- [x] Preserve shared Burmese caption text, font, timing, blur, and export behavior
+- [x] Run regression tests, real MP4 smoke exports, and mobile layout checks
+- [x] Push the verified restructuring to GitHub main
+
+ရက်စွဲ: 2026-08-27 — user instructed to implement the compact grouped UI and final-output-position preview exactly.
