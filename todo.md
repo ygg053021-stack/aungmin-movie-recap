@@ -664,3 +664,15 @@
 - [x] Report verified results separately from remaining limitations
 
 ရက်စွဲ: 2026-08-27 — user requested a final audit of GitHub `main` and current test results.
+
+# One-click automatic Recap workflow — in progress
+
+- [x] Make the Recap action orchestrate source analysis, full-length scene-aware script, 3-second hook, voice, bilingual subtitle, auto layout, blur, and final render without manual setup
+- [x] Set sample-style automatic defaults for Burmese voice delivery, Burmese/English subtitle styling, panel, crop, and output ratio
+- [ ] Detect likely original subtitle regions automatically and create a blur track; keep manual blur as an optional override
+- [x] Keep manual subtitle, blur, logo, watermark, font, size, color, and position controls available after automatic generation
+- [x] Preserve approved script without trimming and reject clearly short narration before final render
+- [x] Run the complete one-click flow with the supplied movie-short and inspect the actual final MP4
+- [x] Push only after the automatic flow and regression tests pass
+
+ရက်စွဲ: 2026-08-27 — user requested automatic one-click Recap with optional manual editing and no repeated user testing.

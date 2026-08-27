@@ -1,6 +1,6 @@
-from pathlib import Path
 import base64
 import tempfile
+from pathlib import Path
 import time
 
 import streamlit as st
@@ -14,6 +14,7 @@ from streamlit_app import (
     validate_media_file, fetch_public_transcript, MAX_DURATION_SECONDS,
 )
 from streamlit_app.audio import caption_for_time
+from streamlit_app.pipeline import run_one_click_recap
 from streamlit_app.editor import add_preview_subtitle, extract_preview_frame, sync_blur_from_canvas, sync_overlays_from_canvas, canvas_initial_drawing
 
 st.set_page_config(page_title=APP_NAME, page_icon="🎬", layout="wide", initial_sidebar_state="expanded")
@@ -121,6 +122,45 @@ with left:
 with right:
     st.markdown('<div class="workspace panel">', unsafe_allow_html=True)
     st.markdown('<div class="panel-head"><div class="panel-title">Production control room</div><div class="ready">● 01–04 selectable</div></div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin:.8rem 0;padding:.8rem;border:1px solid rgba(255,102,114,.42);border-radius:12px;background:linear-gradient(105deg,rgba(226,61,82,.18),rgba(255,107,97,.08))"><b style="color:#ff9aa1">One-click Recap</b><br><span style="color:#c5cada;font-size:.78rem">Source video ကို analysis လုပ်ပြီး full recap script၊ Burmese voice၊ Burmese/English subtitle၊ auto blur နဲ့ final MP4 ကို အလိုအလျောက်လုပ်ပါမယ်။ ပြီးမှ manual controls နဲ့ ထပ်ပြင်နိုင်ပါတယ်။</span></div>', unsafe_allow_html=True)
+    if st.button("🎬 Recap တစ်ချက်နှိပ်ပြီး အလိုအလျောက်လုပ်မယ်", type="primary", use_container_width=True, key="one_click_recap"):
+        if not st.session_state.media_path:
+            st.error("01 · Source မှာ video file ကို အရင် Load လုပ်ပါ။")
+        elif not st.session_state.api_key:
+            st.error("Google AI Studio API key ထည့်ပြီးမှ One-click Recap ကို စတင်နိုင်ပါမယ်။")
+        else:
+            one_click_progress = st.progress(0, text="One-click Recap ပြင်ဆင်နေသည်…")
+            one_click_timing = st.empty()
+            one_click_started = time.monotonic()
+            try:
+                def update_one_click(percent: int, message: str, pipeline_started: float) -> None:
+                    one_click_progress.progress(min(98, max(5, percent)), text=f"{message}…")
+                    one_click_timing.caption(f"ကြာချိန်: {time.monotonic() - one_click_started:.0f} စက္ကန့်")
+                one_click_progress.progress(8, text="Scene အားလုံးကို analysis လုပ်နေသည်…")
+                bundle, voice_preview, final_video = run_one_click_recap(
+                    st.session_state.api_key,
+                    st.session_state.source,
+                    st.session_state.media_path,
+                    editor,
+                    output_platform="TikTok",
+                    voice_name="my-MM-ThihaNeural",
+                    style="စိတ်လှုပ်ရှားဖွယ် ဇာတ်ကြောင်းရေးဟန်",
+                    detail="Detailed",
+                    progress=update_one_click,
+                )
+                st.session_state.bundle = bundle
+                st.session_state.script_approved = True
+                st.session_state.voice_preview = voice_preview
+                st.session_state.voice_approved = True
+                st.session_state.final_video = final_video
+                one_click_progress.progress(100, text="One-click Final MP4 အဆင်သင့်ဖြစ်ပါပြီ")
+                one_click_timing.caption(f"စုစုပေါင်းကြာချိန်: {time.monotonic() - one_click_started:.0f} စက္ကန့်")
+                st.success("One-click Recap ပြီးပါပြီ။ Final tab မှာ result ကိုကြည့်ပြီး လိုအပ်ရင် manual controls နဲ့ ပြင်နိုင်ပါတယ်။")
+                st.rerun()
+            except (ValueError, ImportError, OSError) as exc:
+                one_click_progress.empty()
+                one_click_timing.empty()
+                st.error(f"One-click Recap မအောင်မြင်ပါ: {exc}")
     tabs = st.tabs(["01 · Source", "02 · Voice script", "03 · Recap voice", "04 · Finish"])
     with tabs[0]:
         mode = st.radio("Input type", ["Upload video", "Paste video link"], horizontal=True, key="input_mode")
@@ -284,7 +324,7 @@ with right:
                 editor.blur_w = st.slider("Blur width %", 5, 100, editor.blur_w, 1)
             editor.blur_h = st.slider("Blur height %", 5, 80, editor.blur_h, 1)
         with st.expander("Subtitle / စာတန်းထိုး", expanded=True):
-            editor.subtitle_mode = "Burmese only"
+            editor.subtitle_mode = st.selectbox("Subtitle language / စာတန်းဘာသာ", ["Burmese + English", "Burmese only", "English only"], index=0, key="subtitle_mode")
             if st.button("Auto Subtitle · အသံနဲ့ 100% ချိန်ညှိ", type="secondary", use_container_width=True):
                 editor.subtitle_auto_sync = True
                 st.session_state.auto_subtitle_ready = True

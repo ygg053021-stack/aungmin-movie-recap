@@ -14,6 +14,64 @@ from .media import probe_duration
 ProgressCallback = Callable[[int, str, float], None]
 
 
+def apply_automatic_recap_defaults(editor: EditorState) -> EditorState:
+    """Apply the no-manual-setup preset used by the one-click Recap action.
+
+    Manual Finish controls can still overwrite these values after the automatic
+    render. The preset follows the supplied sample: portrait-friendly lower-band
+    original-subtitle blur, bilingual captions, and readable yellow/white text.
+    """
+    editor.subtitle_enabled = True
+    editor.subtitle_mode = "Burmese + English"
+    editor.subtitle_x = 6
+    editor.subtitle_y = 70
+    editor.subtitle_w = 88
+    editor.subtitle_h = 20
+    editor.subtitle_size = 42
+    editor.subtitle_fill = "#FFF200"
+    editor.subtitle_outline = "#000000"
+    editor.subtitle_background = "#000000"
+    editor.subtitle_background_opacity = 58
+    editor.blur_enabled = True
+    editor.blur_strength = 28
+    editor.blur_x = 0
+    editor.blur_y = 68
+    editor.blur_w = 100
+    editor.blur_h = 32
+    return editor
+
+
+def run_one_click_recap(
+    api_key: str,
+    source: object,
+    media_path: str,
+    editor: EditorState,
+    output_platform: str = "TikTok",
+    voice_name: str = "my-MM-ThihaNeural",
+    style: str = "စိတ်လှုပ်ရှားဖွယ် ဇာတ်ကြောင်းရေးဟန်",
+    detail: str = "Detailed",
+    progress: ProgressCallback | None = None,
+) -> tuple[dict, dict, bytes]:
+    """Run the complete no-manual-setup Recap flow in one transaction."""
+    from .gemini import generate_recap_bundle
+
+    bundle = generate_recap_bundle(api_key, source, media_path, style, detail, 1.0, False, progress)
+    voice_preview = render_voice_preview(media_path, bundle, voice_name, editor, output_platform, progress)
+    apply_automatic_recap_defaults(editor)
+    approved_voice_file = Path(tempfile.gettempdir()) / "aungmin-one-click-approved-voice.mp3"
+    approved_voice_file.write_bytes(voice_preview["voice_bytes"])
+    final_video = render_bundle_to_mp4(
+        media_path,
+        bundle,
+        voice_name,
+        editor,
+        output_platform,
+        progress=progress,
+        approved_voice_path=str(approved_voice_file),
+    )
+    return bundle, voice_preview, final_video
+
+
 def render_voice_preview(
     media_path: str,
     bundle: dict,

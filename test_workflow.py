@@ -7,6 +7,7 @@ from streamlit_app.config import EditorState
 from streamlit_app import pipeline
 from streamlit_app.audio import _atempo_chain, fit_audio_preserving_script
 from streamlit_app.gemini import _validate_full_length_bundle
+from streamlit_app.pipeline import apply_automatic_recap_defaults, run_one_click_recap
 
 
 class WorkflowTests(unittest.TestCase):
@@ -22,6 +23,29 @@ class WorkflowTests(unittest.TestCase):
             with patch("streamlit_app.media.probe_duration", return_value=12.0):
                 with self.assertRaises(ValueError):
                     fit_audio_preserving_script(str(source), str(Path(root) / "fitted.mp3"), 10.0, max_speed_delta=0.1)
+
+    def test_one_click_transaction_generates_voice_applies_defaults_and_renders(self):
+        editor = EditorState()
+        bundle = {"recap_bn": "full recap", "segments": [{"start": 0, "end": 20, "text": "full", "text_en": "full"}]}
+        voice = {"voice_bytes": b"approved voice", "voice_path": "/tmp/approved.mp3"}
+        with patch("streamlit_app.gemini.generate_recap_bundle", return_value=bundle) as generate, patch.object(pipeline, "render_voice_preview", return_value=voice) as preview, patch.object(pipeline, "render_bundle_to_mp4", return_value=b"\\x00\\x00\\x00final") as render:
+            result_bundle, result_voice, result_video = run_one_click_recap("key", object(), "/tmp/source.mp4", editor)
+        self.assertIs(result_bundle, bundle)
+        self.assertIs(result_voice, voice)
+        self.assertEqual(result_video, b"\\x00\\x00\\x00final")
+        self.assertTrue(editor.subtitle_enabled)
+        self.assertTrue(editor.blur_enabled)
+        generate.assert_called_once()
+        preview.assert_called_once()
+        render.assert_called_once()
+
+    def test_one_click_defaults_enable_bilingual_subtitle_and_blur(self):
+        editor = apply_automatic_recap_defaults(EditorState())
+        self.assertTrue(editor.subtitle_enabled)
+        self.assertEqual(editor.subtitle_mode, "Burmese + English")
+        self.assertTrue(editor.blur_enabled)
+        self.assertEqual((editor.blur_x, editor.blur_y, editor.blur_w, editor.blur_h), (0, 68, 100, 32))
+        self.assertEqual(editor.subtitle_fill, "#FFF200")
 
     def test_short_recap_bundle_is_rejected_before_tts(self):
         with self.assertRaisesRegex(ValueError, "တိုလွန်း"):
