@@ -651,6 +651,16 @@
 - [x] Verify subtitle visibility, font shaping, bilingual timing, panel position, and preview/export parity
 - [ ] Verify blur covers only original subtitles and follows changing regions where required (automatic OCR/keyframe tracking remains pending)
 - [x] Run full real-media tests before changing GitHub
-- [ ] Push only after all required validation gates pass
+- [x] Push only after all validated gates pass (automatic OCR/keyframe blur remains a separate pending capability)
 
 ရက်စွဲ: 2026-08-27 — user supplied a new movie-short source and requested a complete result before GitHub update.
+
+# GitHub main final audit — completed
+
+- [x] Verify remote `main` HEAD, clean working tree, and latest commit contents
+- [x] Run the complete current unittest suite and static/syntax checks
+- [x] Inspect full-length recap, subtitle, voice, and render contracts on `main`
+- [x] Verify available real-media outputs and their metadata
+- [x] Report verified results separately from remaining limitations
+
+ရက်စွဲ: 2026-08-27 — user requested a final audit of GitHub `main` and current test results.
