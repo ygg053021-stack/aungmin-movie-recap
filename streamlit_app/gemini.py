@@ -236,6 +236,25 @@ def _parse_bundle(text: str, duration: float | None = None) -> dict:
     return result
 
 
+def _validate_full_length_bundle(bundle: dict, duration: float | None) -> None:
+    """Reject a clearly short or non-scene-aware recap before it reaches TTS."""
+    if not duration or duration < 15:
+        return
+    recap = re.sub(r"\s+", "", str(bundle.get("recap_bn", "")))
+    minimum_chars = max(280, int(float(duration) * 10.0))
+    if len(recap) < minimum_chars:
+        raise ValueError(
+            f"Recap script တိုလွန်းပါသည် ({len(recap)} characters)။ "
+            f"{minimum_chars} characters အနည်းဆုံးလိုအပ်သောကြောင့် scene အားလုံးပါအောင် ပြန် generate လုပ်ပါ။"
+        )
+    segments = bundle.get("segments")
+    if not isinstance(segments, list) or len(segments) < 4:
+        raise ValueError("Scene-aware recap segments မလုံလောက်ပါ။ Video ကို scene အလိုက် ပြန် generate လုပ်ပါ။")
+    coverage = sum(max(0.0, float(item.get("end", 0.0)) - float(item.get("start", 0.0))) for item in segments if isinstance(item, dict))
+    if coverage < float(duration) * 0.9:
+        raise ValueError("Scene timeline သည် video duration ရဲ့ 90% မဖုံးလွှမ်းသေးပါ။ Scene အစအဆုံး ပြန် generate လုပ်ပါ။")
+
+
 def generate_recap_bundle(
     api_key: str,
     source: SourceInfo,
@@ -258,15 +277,19 @@ def generate_recap_bundle(
         progress(20, "Gemini video file ကို စစ်နေသည်", started)
     active_file = wait_for_file_active(api_key, uploaded, progress, started, client)
     duration = probe_duration(media_path)
-    # Burmese narration typically reads about 8–10 Unicode codepoints/sec with
-    # the selected neural voices; target that range so duration fitting only makes
-    # a small natural pacing correction instead of padding long silence.
-    target_chars = max(220, int(duration * 8.5)) if duration else 500
-    target = f"{max(160, target_chars - 40)} မှ {target_chars + 40}"
+    # A short summary leaves most of the source video without meaningful narration.
+    # Request a genuinely full-length recap: Burmese codepoint counts are only a
+    # planning heuristic, so the post-parse guard below also rejects clearly short
+    # bundles instead of silently padding them with long empty gaps.
+    target_chars = max(360, int(duration * 11.5)) if duration else 700
+    minimum_chars = max(280, int(duration * 10.0)) if duration else 560
+    target = f"{max(minimum_chars, target_chars - 55)} မှ {target_chars + 55}"
     duration_text = f"{duration:.1f} စက္ကန့်" if duration else "မသိရသေးသောကြာချိန်"
-    prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပြီး **{duration_text} အတွင်း ဖတ်ပြီးဆုံးမည့် narration** ကိုရေးပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။
+    prompt = f"""ပေးထားသော video ကို အစမှအဆုံး သေချာကြည့်ပြီး **{duration_text} အတွင်း အစအဆုံးကို အဓိပ္ပာယ်ရှိစွာ ဖုံးလွှမ်းမည့် full-length narration** ကိုရေးပါ။ Video မှာ အသံမရှိလျှင် မြင်ကွင်းများကိုသာ အခြေခံပါ။ အသံရှိလျှင် audio/dialogue နဲ့ visual scene နှစ်ခုလုံးကို ပေါင်းစပ်ပါ။ Video ကို speed {speed:.2f}x ဖြင့်ပြင်ထားပြီး {"ဘယ်ညာ flip ပြင်ထားသည်" if flipped else "မူရင်းဦးတည်ချက်အတိုင်းဖြစ်သည်"}။
 
-မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ **မြင်ကွင်းဖြစ်စဉ်အလိုက် အစမှအဆုံး မကျော်ဘဲ ရေးပါ**။ Scene အသစ်တိုင်းမှာ အဲဒီ scene ရဲ့ လုပ်ဆောင်ချက်ကို အရင်ပြောပြီး နောက်မှ အဓိပ္ပာယ်/ရလဒ်ကို ပြောပါ။ မြန်မြန်ကျော်သွားတဲ့ scene များကို စကားရှည်မရေးပါနှင့်။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ **Target length သည် {target} မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ {duration_text} ထက် စောပြီးမပြီး၊ ပိုပြီးမရှည်အောင် ရေးပါ။ အပိုအကြောင်းအရာ/နိဂုံးချုပ် filler မထည့်ပါနှင့်။** Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
+မြန်မာ movie recap narrator စာမူကို ဖန်တီးပါ။ မူရင်းမှာမပါတဲ့အချက် မထည့်ပါနှင့်။ **Video ရဲ့ ပထမ 3 seconds ကို သီးခြားစိတ်ဝင်စားစရာ hook အဖြစ် စတင်ပြီး၊ အဲဒီနောက် scene တစ်ခုချင်းစီရဲ့ လုပ်ဆောင်ချက်၊ တုံ့ပြန်မှု၊ အကြောင်းရင်းနဲ့ ရလဒ်ကို အစမှအဆုံး မကျော်ဘဲ အသေးစိတ်ဖော်ပြပါ။** Video အစ၊ အလယ်၊ အဆုံး ဘယ်အပိုင်းကိုမှ စာကြောင်းတိုနဲ့ ကျော်မသွားပါနှင့်။ Scene အသစ်တိုင်းမှာ အဲဒီ scene ရဲ့ လုပ်ဆောင်ချက်ကို အရင်ပြောပြီး နောက်မှ အဓိပ္ပာယ်/ရလဒ်ကို ပြောပါ။ မြန်မြန်ကျော်သွားတဲ့ scene များကိုလည်း အနည်းဆုံး အဓိက action နဲ့ reaction ပါအောင် ရေးပါ။ ဇာတ်ကောင်အမည်ကို တိကျစွာသုံးပါ။ ဇာတ်ကောင်အမည်နေရာတွင် မင်း၊ မင်း၏၊ မင်းတို့၊ မင်းရဲ့ ဟူသော နာမ်စားများ မသုံးပါနှင့်။ Output သည် မြန်မာစာဖြင့်သာ ဖြစ်ရမည်။ TTS ဖတ်ရန် သဘာဝကျသော ပုဒ်ဖြတ်ပုဒ်ရပ် သုံးပါ။ **Target length သည် {target} မြန်မာစာလုံးဝန်းကျင် ဖြစ်ရမည်။ အနည်းဆုံး {minimum_chars} non-space မြန်မာစာလုံး မပြည့်လျှင် output ကို မပြီးသေးဟု သတ်မှတ်ပြီး ပိုမိုအသေးစိတ် scene coverage ထပ်ရေးပါ။ {duration_text} ထက် စောပြီးမပြီး၊ ပိုပြီးမရှည်အောင် ရေးပါ။ အပိုအကြောင်းအရာ/နိဂုံးချုပ် filler မထည့်ပါနှင့်။** Narration style သည် {style} ဖြစ်ရမည်။ Detail level သည် {detail} ဖြစ်ရမည်။
+
+**segments ကို မဖြစ်မနေ ပြန်ပေးပါ။** အနည်းဆုံး scene ၈ ခု သို့မဟုတ် video duration ၈ စက္ကန့်လျှင် တစ်ခုနှုန်းနီးပါး ခွဲပြီး၊ segment တိုင်းမှာ source `start`/`end` seconds၊ မြန်မာ narration `text` နဲ့ အဓိပ္ပာယ်တူ `text_en` ပါရမည်။ Segments ရဲ့ စုစုပေါင်းအချိန်က video ရဲ့ အနည်းဆုံး 90% ကို ဖုံးလွှမ်းရမည်။
 
 JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ Markdown မသုံးပါနှင့်။ JSON key များကို အောက်ပါအတိုင်း တိတိကျကျသုံးပါ။ `segments` ထဲက segment တိုင်းတွင် Burmese `text` နှင့် အဓိပ္ပာယ်တူ English `text_en` ကို မဖြစ်မနေထည့်ပါ။ `text_en` သည် Burmese narration ကို တိုက်ရိုက်ဘာသာပြန်ထားခြင်းဖြစ်ပြီး စာကြောင်းအလယ်မှာ မဖြတ်ပါနှင့်။
 {{"recap_bn":"မြန်မာ recap narration စာမူ","subtitle_bn":"မြန်မာစာတန်းထိုးရန် စာမူ","subtitle_en":"English translation စာမူ","segments":[{{"start":0,"end":3,"text":"ပထမ ၃ စက္ကန့်အတွက် Burmese hook","text_en":"English translation of the hook"}}]}}"""
@@ -289,6 +312,7 @@ JSON တစ်ခုတည်းကိုသာ ပြန်ပေးပါ။ M
     )
     text = extract_gemini_text(response)
     bundle = _parse_bundle(text, duration)
+    _validate_full_length_bundle(bundle, duration)
     bundle["model"] = used_model
     if progress:
         progress(42, f"မြန်မာ recap script ပြီးပါပြီ ({used_model})", started)

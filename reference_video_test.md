@@ -51,3 +51,23 @@ After adding explicit `\\pos` tags and `original_size=1080x1920`, the final MP4 
 ## Final ASS render verification
 
 The final ASS pipeline renders visible Burmese and English captions inside the shared subtitle panel. Portrait output is 1080x1920 and landscape output is 1920x1080; both preserve the 44.070-second source duration at 30 FPS with H.264 video and AAC audio. The portrait frame shows Burmese in yellow with black outline and English in white below it. The landscape frame preserves the same normalized subtitle panel and positions the portrait source with black side padding rather than stretching it. The 27-test unittest suite passes after the final caption changes.
+
+
+## Newly supplied movie short inspection
+
+Source: `TheGangsterMessedwithaMan_butTheyDidn_tKnowHeWasaMafiaBoss__cdrama_kdrama_shorts(480P).mp4`.
+
+Verified media facts: duration 60.000363 seconds; primary video H.264 at 480x854 and 30 FPS; primary audio AAC at 44.1 kHz stereo. The file also contains an MJPEG 1280x720 stream, which must not be mistaken for the primary movie picture during processing.
+
+Speech-to-text returned a full English narration transcript with timestamped beats: 00:00–00:07 a man eats with his girlfriend while gangsters destroy a nearby restaurant table; 00:07–00:11.7 he remains calm; 00:11.7–00:14.9 the leader orders him to leave; 00:14.9–00:21.1 he refuses and says he is still eating while the owner explains; 00:21.1–00:24.8 the leader pushes the owner and mistreats the girlfriend; 00:24.8–00:28.5 the gangsters discover he is a mafia boss; 00:28.5–00:32.2 he defeats the gangsters; 00:32.2–00:34.4 they become frightened; 00:34.4–00:37 the leader calls his older brother; 00:37–00:40.7 the owner urges the man to run; 00:40.7–00:44 he calmly waits; 00:44–00:51 an expensive car arrives with the older brother; 00:51–00:54.3 the gangsters celebrate; 00:54.3–00:59.9 the older brother recognizes the man, beats his own men, and leaves.
+
+The 5-second contact sheet confirms a portrait short-form edit: restaurant exterior and table action in the opening, calm male lead close-ups, gangster/owner reactions, physical confrontation, and a later arrival/reveal beat. The existing on-screen English word captions are part of the supplied reference edit and should not be treated as the Burmese/English subtitle output layer.
+
+
+## Full-length real render verification
+
+The newly supplied 60.000363-second portrait source was rendered using a detailed 14-segment Burmese recap with a dedicated 0–3 second hook. The continuous narration was accepted without silent script trimming, and the final portrait output measured exactly 60.000000 seconds at 1080x1920 and 30 FPS with H.264 video and AAC audio. The final frame strip shows Burmese yellow captions and English white captions over a separate dark panel, with the portrait source centered and blurred extension above/below.
+
+A second real render enabled the region blur track. It produced a valid 60.000000-second 1080x1920 MP4 with the blur layer and bilingual captions present. The blur region is currently the manually configured normalized region; automatic OCR/keyframe tracking of changing original subtitle regions remains a separate capability and was not claimed as verified by this test.
+
+The full regression suite passes 29 tests after adding the full-length bundle validator. The production prompt now requests a 3-second hook, detailed scene coverage, at least 90% scene timeline coverage, bilingual per-segment text, and a minimum duration-scaled script length; clearly short bundles are rejected before TTS rather than padded as if complete.

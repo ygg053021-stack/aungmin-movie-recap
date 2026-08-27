@@ -629,13 +629,28 @@
 
 ရက်စွဲ: 2026-08-27 — user supplied a new sample recap video and requested immediate factual extraction followed by a better design.
 
-# New real-video end-to-end regression request — in progress
+# New real-video end-to-end regression request — completed
 
-- [ ] Read and reconcile `/home/ubuntu/upload/pasted_content.txt` with the newly supplied source video requirements
-- [ ] Run the current app workflow from source through final MP4 using `/home/ubuntu/upload/5_6075551322629742944.mp4`
-- [ ] Verify Burmese/English subtitle visibility, narration timing, script completeness, hook behavior, blur coverage, preview/export parity, and output duration
-- [ ] Fix only failures reproduced by the real test while preserving working stages
-- [ ] Re-run all regression tests and real MP4 smoke tests
-- [ ] Push only the verified final changes to GitHub `main`
+- [x] Read and reconcile `/home/ubuntu/upload/pasted_content.txt` with the newly supplied source video requirements
+- [x] Run the current app workflow from source through final MP4 using `/home/ubuntu/upload/5_6075551322629742944.mp4`
+- [x] Verify Burmese/English subtitle visibility, narration timing, script completeness, hook behavior, blur coverage, preview/export parity, and output duration
+- [x] Fix only failures reproduced by the real test while preserving working stages
+- [x] Re-run all regression tests and real MP4 smoke tests
+- [x] Push only the verified final changes to GitHub `main`
 
 ရက်စွဲ: 2026-08-27 — user requested full end-to-end verification before any GitHub update.
+
+# Full-length recap rebuild for newly supplied movie short — completed with one limitation
+
+- [x] Inspect `/home/ubuntu/upload/TheGangsterMessedwithaMan_butTheyDidn_tKnowHeWasaMafiaBoss__cdrama_kdrama_shorts(480P).mp4` metadata, scenes, original audio, and on-screen text
+- [x] Read and reconcile the newly supplied `pasted_content.txt` requirements
+- [x] Extract a full scene-aware recap plan rather than a short placeholder narration
+- [x] Add a strict 3-second hook followed by detailed scene coverage through the full source duration
+- [x] Preserve the complete approved script and use it for narration and Burmese/English subtitles
+- [x] Keep one stable natural narration pace and validate audio/video duration alignment
+- [x] Verify subtitle visibility, font shaping, bilingual timing, panel position, and preview/export parity
+- [ ] Verify blur covers only original subtitles and follows changing regions where required (automatic OCR/keyframe tracking remains pending)
+- [x] Run full real-media tests before changing GitHub
+- [ ] Push only after all required validation gates pass
+
+ရက်စွဲ: 2026-08-27 — user supplied a new movie-short source and requested a complete result before GitHub update.

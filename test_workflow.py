@@ -6,6 +6,7 @@ from unittest.mock import patch
 from streamlit_app.config import EditorState
 from streamlit_app import pipeline
 from streamlit_app.audio import _atempo_chain, fit_audio_preserving_script
+from streamlit_app.gemini import _validate_full_length_bundle
 
 
 class WorkflowTests(unittest.TestCase):
@@ -21,6 +22,28 @@ class WorkflowTests(unittest.TestCase):
             with patch("streamlit_app.media.probe_duration", return_value=12.0):
                 with self.assertRaises(ValueError):
                     fit_audio_preserving_script(str(source), str(Path(root) / "fitted.mp3"), 10.0, max_speed_delta=0.1)
+
+    def test_short_recap_bundle_is_rejected_before_tts(self):
+        with self.assertRaisesRegex(ValueError, "တိုလွန်း"):
+            _validate_full_length_bundle(
+                {
+                    "recap_bn": "တိုတောင်းသော recap",
+                    "segments": [{"start": 0, "end": 60, "text": "တိုတောင်းသော recap", "text_en": "A short recap"}],
+                },
+                60.0,
+            )
+
+    def test_full_length_bundle_requires_scene_coverage(self):
+        bundle = {
+            "recap_bn": "က" * 650,
+            "segments": [
+                {"start": 0, "end": 20, "text": "က" * 120, "text_en": "A"},
+                {"start": 20, "end": 40, "text": "က" * 120, "text_en": "B"},
+                {"start": 40, "end": 55, "text": "က" * 120, "text_en": "C"},
+                {"start": 55, "end": 60, "text": "က" * 120, "text_en": "D"},
+            ],
+        }
+        _validate_full_length_bundle(bundle, 60.0)
 
     def test_final_render_copies_approved_voice_without_regenerating(self):
         with tempfile.TemporaryDirectory() as root:
